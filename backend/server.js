@@ -17,6 +17,7 @@ const orderRoutes = require('./routes/orders');
 const cartRoutes = require('./routes/cart');
 const adminRoutes = require('./routes/admin');
 const libraryRoutes = require('./routes/library');
+const readerRoutes = require('./routes/reader');
 
 const app = express();
 
@@ -56,6 +57,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/library', libraryRoutes);
+app.use('/api/reader', readerRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Hindu Marketplace API is running!' });
