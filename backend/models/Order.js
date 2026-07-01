@@ -32,4 +32,8 @@ const orderSchema = new mongoose.Schema({
   }
 });
 
+// "my-orders" and the admin orders view both filter by user/status and sort by date.
+orderSchema.index({ user: 1, status: 1, createdAt: -1 });
+orderSchema.index({ createdAt: -1 });
+
 module.exports = mongoose.model('Order', orderSchema);

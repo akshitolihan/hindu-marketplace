@@ -1,6 +1,226 @@
 @import "tailwindcss";
 
-body {
-  background-color: #FDF5E6;
-  color: #1F2937;
+/* ============================================================
+   Hindu Wisdom — "Warm Temple Gold" premium design system
+   Palette: ivory · deep maroon (sindoor) · temple gold · saffron
+   Type: Cormorant Garamond (serif display) + Inter (body)
+   ============================================================ */
+@theme {
+  /* Brand palette — existing utilities (bg-maroon, text-gold, bg-cream…) map here */
+  --color-cream: #faf6ee;          /* page background (warm ivory) */
+  --color-sand: #f3eadb;           /* elevated / panel tint */
+  --color-maroon: #6b1e2e;         /* primary (sindoor) */
+  --color-maroon-dark: #4c1320;    /* deep primary for gradients */
+  --color-gold: #c8a04a;           /* temple gold accent */
+  --color-gold-light: #e4c97e;     /* soft gold highlight */
+  --color-saffron: #e0892b;        /* marigold saffron */
+  --color-ink: #2a2118;            /* primary text (warm near-black) */
+  --color-ink-soft: #6b5f4f;       /* muted text */
+
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-serif: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+
+  --shadow-soft: 0 10px 30px -12px rgba(76, 19, 32, 0.18);
+  --shadow-lift: 0 22px 50px -18px rgba(76, 19, 32, 0.32);
 }
+
+/* ---------- Base ---------- */
+body {
+  background-color: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, .font-display {
+  font-family: var(--font-serif);
+  letter-spacing: 0.01em;
+}
+
+::selection {
+  background: var(--color-gold-light);
+  color: var(--color-maroon-dark);
+}
+
+/* Refined scrollbar */
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: #d9c9a8;
+  border-radius: 999px;
+  border: 3px solid var(--color-cream);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--color-gold); }
+
+/* ---------- Reusable components ---------- */
+@layer components {
+  /* Eyebrow / kicker label */
+  .eyebrow {
+    font-family: var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: 0.28em;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--color-saffron);
+  }
+
+  /* Gold hairline divider */
+  .divider-gold {
+    height: 1px;
+    width: 100%;
+    background: linear-gradient(
+      to right,
+      transparent,
+      var(--color-gold) 20%,
+      var(--color-gold) 80%,
+      transparent
+    );
+    opacity: 0.6;
+  }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 9999px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    padding: 0.7rem 1.6rem;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+    cursor: pointer;
+  }
+  .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--color-maroon), var(--color-maroon-dark));
+    color: #fff;
+    box-shadow: var(--shadow-soft);
+  }
+  .btn-primary:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 18px 40px -14px rgba(107, 30, 46, 0.55);
+  }
+
+  .btn-gold {
+    background: linear-gradient(135deg, var(--color-gold-light), var(--color-gold));
+    color: var(--color-maroon-dark);
+    box-shadow: 0 10px 26px -12px rgba(200, 160, 74, 0.7);
+  }
+  .btn-gold:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 18px 40px -14px rgba(200, 160, 74, 0.85);
+  }
+
+  .btn-outline {
+    background: transparent;
+    color: var(--color-maroon);
+    border: 1.5px solid color-mix(in srgb, var(--color-maroon) 35%, transparent);
+  }
+  .btn-outline:hover:not(:disabled) {
+    background: var(--color-maroon);
+    color: #fff;
+    border-color: var(--color-maroon);
+  }
+
+  /* Light outline for use on dark / maroon backgrounds */
+  .btn-outline-light {
+    background: transparent;
+    color: var(--color-cream);
+    border: 1.5px solid rgba(250, 246, 238, 0.4);
+  }
+  .btn-outline-light:hover:not(:disabled) {
+    background: var(--color-cream);
+    color: var(--color-maroon);
+    border-color: var(--color-cream);
+    transform: translateY(-2px);
+  }
+
+  /* Compact button size */
+  .btn-sm {
+    padding: 0.5rem 1.15rem;
+    font-size: 0.85rem;
+  }
+
+  /* Cards */
+  .card {
+    background: #fff;
+    border: 1px solid rgba(200, 160, 74, 0.22);
+    border-radius: 1.25rem;
+    box-shadow: var(--shadow-soft);
+  }
+  .card-hover { transition: transform 0.25s ease, box-shadow 0.25s ease; }
+  .card-hover:hover { transform: translateY(-6px); box-shadow: var(--shadow-lift); }
+
+  /* Inputs */
+  .field {
+    width: 100%;
+    background: #fffdf8;
+    border: 1.5px solid #e6dcc6;
+    border-radius: 0.75rem;
+    padding: 0.65rem 0.9rem;
+    color: var(--color-ink);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .field:focus {
+    outline: none;
+    border-color: var(--color-gold);
+    box-shadow: 0 0 0 3px rgba(200, 160, 74, 0.18);
+  }
+  /* Search variant: pill shape with room for a leading icon */
+  .field-search {
+    border-radius: 9999px;
+    padding-left: 2.5rem;
+  }
+
+  /* Pill badge */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 0.2rem 0.7rem;
+    border-radius: 9999px;
+  }
+
+  /* Faint mandala watermark */
+  .mandala {
+    background-image: url('/mandala.svg');
+    background-repeat: no-repeat;
+    background-size: contain;
+    background-position: center;
+  }
+}
+
+/* ---------- Utilities ---------- */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@keyframes floaty {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+.animate-floaty { animation: floaty 6s ease-in-out infinite; }
+
+@keyframes spin-slow { to { transform: rotate(360deg); } }
+.animate-spin-slow { animation: spin-slow 90s linear infinite; }
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up { animation: fade-up 0.6s ease both; }

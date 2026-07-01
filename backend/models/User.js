@@ -15,6 +15,11 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: false
   },
+  role: {
+    type: String,
+    enum: ['user', 'admin'],
+    default: 'user'
+  },
   googleId: {
     type: String,
     unique: true,
@@ -38,5 +43,8 @@ const userSchema = new mongoose.Schema({
     default: Date.now
   }
 });
+
+// Admin user list sorts newest-first.
+userSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('User', userSchema);

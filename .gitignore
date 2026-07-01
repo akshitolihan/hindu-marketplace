@@ -12,9 +12,10 @@ frontend/dist-ssr/
 # Uploads
 backend/uploads/
 
-# IDE
+# IDE / local tooling
 .vscode/
 .idea/
+.claude/
 
 # OS files
 .DS_Store

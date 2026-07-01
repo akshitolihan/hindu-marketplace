@@ -1,5 +1,5 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
-import axios from 'axios';
+import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import api from '../api/client';
 
 const AuthContext = createContext();
 
@@ -8,29 +8,42 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState(localStorage.getItem('token'));
 
-  useEffect(() => {
-    if (token) {
-      // For now, just set loading to false
-      // We'll add token verification later
-      setLoading(false);
-    } else {
-      setLoading(false);
+  // Validate the stored token against the server and load the user. Exposed so
+  // flows that set a token directly (email verify, password reset) can refresh
+  // the in-memory user without a full page reload.
+  const refreshUser = useCallback(async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setUser(null);
+      return null;
     }
-  }, [token]);
+    try {
+      const res = await api.get('/auth/me');
+      setUser(res.data);
+      return res.data;
+    } catch {
+      localStorage.removeItem('token');
+      setUser(null);
+      return null;
+    }
+  }, []);
+
+  // On boot, validate any stored token.
+  useEffect(() => {
+    refreshUser().finally(() => setLoading(false));
+  }, [refreshUser]);
+
+  const persist = (token, userData) => {
+    localStorage.setItem('token', token);
+    setUser(userData);
+  };
 
   const login = async (email, password) => {
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/login', {
-        email,
-        password
-      });
-      const { token, user } = response.data;
-      localStorage.setItem('token', token);
-      setToken(token);
-      setUser(user);
-      return { success: true };
+      const { data } = await api.post('/auth/login', { email, password });
+      persist(data.token, data.user);
+      return { success: true, user: data.user };
     } catch (error) {
       return { success: false, error: error.response?.data?.message || 'Login failed' };
     }
@@ -38,25 +51,29 @@ export const AuthProvider = ({ children }) => {
 
   const signup = async (name, email, password) => {
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/signup', {
-        name,
-        email,
-        password
-      });
-      return { success: true, message: response.data.message };
+      const { data } = await api.post('/auth/signup', { name, email, password });
+      // If verification is off, the backend returns a token and logs us in.
+      if (data.token) persist(data.token, data.user);
+      return {
+        success: true,
+        message: data.message,
+        requiresVerification: !!data.requiresVerification,
+        loggedIn: !!data.token
+      };
     } catch (error) {
       return { success: false, error: error.response?.data?.message || 'Signup failed' };
     }
   };
 
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem('token');
-    setToken(null);
     setUser(null);
-  };
+  }, []);
 
   return (
-    <AuthContext.Provider value={{ user, login, signup, logout, loading, token }}>
+    <AuthContext.Provider
+      value={{ user, login, signup, logout, loading, refreshUser, isAdmin: user?.role === 'admin' }}
+    >
       {children}
     </AuthContext.Provider>
   );
