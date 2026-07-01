@@ -13,13 +13,34 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// On 401, clear the stale token so the app drops back to a logged-out state.
+// Free hosting (Render) sleeps after inactivity, so the first request can fail
+// with 502/503/network error while it wakes (~50s). Auto-retry GET requests a
+// few times so visitors see a loading state instead of an "empty" page.
+const MAX_RETRIES = 6;
+const RETRY_DELAY_MS = 5000;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
-    if (err.response?.status === 401) {
+  async (err) => {
+    const config = err.config;
+    const status = err.response?.status;
+
+    if (status === 401) {
       localStorage.removeItem('token');
     }
+
+    // Retry idempotent GETs while the backend is waking up.
+    const wakingUp = status === 502 || status === 503 || status === 504 || !err.response;
+    if (config && (config.method || 'get').toLowerCase() === 'get' && wakingUp) {
+      config.__retryCount = config.__retryCount || 0;
+      if (config.__retryCount < MAX_RETRIES) {
+        config.__retryCount += 1;
+        await sleep(RETRY_DELAY_MS);
+        return api(config);
+      }
+    }
+
     return Promise.reject(err);
   }
 );
