@@ -23,12 +23,16 @@ const wrap = (text, max) => {
   return lines.slice(0, 3);
 };
 
+// Escape XML special characters so titles like "Isha & Kena" don't break the SVG.
+const esc = (s) =>
+  String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/'/g, '&apos;');
+
 // Build a tasteful SVG cover as a data URI (portrait 3:4).
 const cover = (title, author, c1, c2) => {
   const lines = wrap(title, 13);
   const startY = 430 - (lines.length - 1) * 34;
   const titleSvg = lines
-    .map((l, i) => `<text x='300' y='${startY + i * 68}' font-family='Georgia, serif' font-size='54' fill='#FBF3E0' text-anchor='middle'>${l}</text>`)
+    .map((l, i) => `<text x='300' y='${startY + i * 68}' font-family='Georgia, serif' font-size='54' fill='#FBF3E0' text-anchor='middle'>${esc(l)}</text>`)
     .join('');
   const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='600' height='800' viewBox='0 0 600 800'>
     <defs>
@@ -42,7 +46,7 @@ const cover = (title, author, c1, c2) => {
     <text x='300' y='192' font-family='Georgia, serif' font-size='64' fill='#E4C97E' text-anchor='middle'>&#2384;</text>
     ${titleSvg}
     <line x1='230' y1='650' x2='370' y2='650' stroke='#E4C97E' stroke-opacity='0.6' stroke-width='1.5'/>
-    <text x='300' y='700' font-family='Georgia, serif' font-size='28' fill='#F3E9D2' fill-opacity='0.9' text-anchor='middle' font-style='italic'>${author}</text>
+    <text x='300' y='700' font-family='Georgia, serif' font-size='28' fill='#F3E9D2' fill-opacity='0.9' text-anchor='middle' font-style='italic'>${esc(author)}</text>
   </svg>`;
   return 'data:image/svg+xml,' + encodeURIComponent(svg);
 };
