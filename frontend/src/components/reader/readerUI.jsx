@@ -7,6 +7,16 @@ export const THEMES = {
   dark: { label: 'Dark', pageFilter: 'invert(0.9) hue-rotate(180deg) contrast(0.95)', area: '#0b0f12' }
 };
 
+// Subtle, premium translucent highlight colors (bg = overlay, dot = swatch).
+export const HL_COLORS = {
+  yellow: { bg: 'rgba(255,214,92,0.40)', dot: '#E8C24B' },
+  blue: { bg: 'rgba(96,152,255,0.35)', dot: '#5A96FF' },
+  green: { bg: 'rgba(88,196,132,0.35)', dot: '#4FBF7B' },
+  pink: { bg: 'rgba(240,140,178,0.38)', dot: '#EE8CB6' },
+  purple: { bg: 'rgba(176,138,238,0.35)', dot: '#B08AEE' }
+};
+export const HL_KEYS = Object.keys(HL_COLORS);
+
 // Minimal stroke icon set (lucide-ish) so the toolbar looks premium and clean.
 const P = {
   menu: 'M3 6h18M3 12h18M3 18h18',
