@@ -25,7 +25,7 @@ async function userOwns(userId, productId) {
 router.get('/:productId/access', auth, async (req, res) => {
   try {
     const product = await Product.findOne({ _id: req.params.productId, isPublished: true }).select(
-      'title author coverImage price salePrice saleEndsAt previewPages'
+      'title author coverImage price salePrice saleEndsAt previewPages allowDownload allowHighlights allowNotes allowBookmarks allowCopy chapters'
     );
     if (!product) return res.status(404).json({ message: 'Book not found' });
     const owned = await userOwns(req.user.id, req.params.productId);
@@ -38,7 +38,15 @@ router.get('/:productId/access', auth, async (req, res) => {
       price: product.price,
       salePrice: product.salePrice,
       onSale: product.onSale,
-      effectivePrice: product.effectivePrice
+      effectivePrice: product.effectivePrice,
+      permissions: {
+        download: product.allowDownload,
+        highlights: product.allowHighlights,
+        notes: product.allowNotes,
+        bookmarks: product.allowBookmarks,
+        copy: product.allowCopy
+      },
+      chapters: product.chapters || []
     });
   } catch (e) {
     res.status(404).json({ message: 'Book not found' });

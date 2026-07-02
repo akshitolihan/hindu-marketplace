@@ -61,6 +61,20 @@ const productSchema = new mongoose.Schema({
     default: 0,
     min: 0
   },
+  // Per-book reader permissions.
+  allowDownload: { type: Boolean, default: false },
+  allowHighlights: { type: Boolean, default: true },
+  allowNotes: { type: Boolean, default: true },
+  allowBookmarks: { type: Boolean, default: true },
+  allowCopy: { type: Boolean, default: true },
+  // Manual table of contents, used when the PDF has no embedded outline.
+  chapters: [
+    {
+      _id: false,
+      title: { type: String, trim: true },
+      page: { type: Number, min: 1 }
+    }
+  ],
   createdAt: {
     type: Date,
     default: Date.now

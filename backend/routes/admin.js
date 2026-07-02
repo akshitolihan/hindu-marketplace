@@ -1,8 +1,13 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const { body } = require('express-validator');
 const Product = require('../models/Product');
 const Order = require('../models/Order');
 const User = require('../models/User');
+const ReadingProgress = require('../models/ReadingProgress');
+const Highlight = require('../models/Highlight');
+const Note = require('../models/Note');
+const Bookmark = require('../models/Bookmark');
 const adminAuth = require('../middleware/adminAuth');
 const validate = require('../middleware/validate');
 const { uploadBookFiles } = require('../middleware/upload');
@@ -101,6 +106,19 @@ router.put('/products/:id', async (req, res) => {
     if (req.body.isPublished !== undefined) product.isPublished = !!req.body.isPublished;
     if (req.body.previewPages !== undefined) product.previewPages = Math.max(0, parseInt(req.body.previewPages, 10) || 0);
 
+    // Per-book permission toggles.
+    for (const key of ['allowDownload', 'allowHighlights', 'allowNotes', 'allowBookmarks', 'allowCopy']) {
+      if (req.body[key] !== undefined) product[key] = !!req.body[key];
+    }
+
+    // Manual chapters (only valid rows with a title and page).
+    if (Array.isArray(req.body.chapters)) {
+      product.chapters = req.body.chapters
+        .filter((c) => c && c.title && c.page)
+        .map((c) => ({ title: String(c.title).slice(0, 120), page: Math.max(1, parseInt(c.page, 10) || 1) }))
+        .slice(0, 200);
+    }
+
     await product.save();
     res.json({ message: 'Product updated', product });
   } catch (error) {
@@ -152,6 +170,50 @@ router.delete('/products/:id', async (req, res) => {
     res.json({ message: 'Product deleted' });
   } catch (error) {
     console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route GET /api/admin/products/:id/analytics  (privacy-conscious reading stats)
+router.get('/products/:id/analytics', async (req, res) => {
+  try {
+    let pid;
+    try { pid = new mongoose.Types.ObjectId(req.params.id); } catch { return res.status(400).json({ message: 'Bad id' }); }
+
+    const [progress, dropOffAgg, hlAgg, hlCount, noteCount, bmCount] = await Promise.all([
+      ReadingProgress.find({ product: pid }).select('percent status lastPage'),
+      ReadingProgress.aggregate([
+        { $match: { product: pid, status: { $ne: 'completed' } } },
+        { $group: { _id: '$lastPage', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 5 }
+      ]),
+      Highlight.aggregate([
+        { $match: { product: pid } },
+        { $group: { _id: '$page', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 5 }
+      ]),
+      Highlight.countDocuments({ product: pid }),
+      Note.countDocuments({ product: pid }),
+      Bookmark.countDocuments({ product: pid })
+    ]);
+
+    const opens = progress.length;
+    const completed = progress.filter((p) => p.status === 'completed').length;
+    const avgProgress = opens ? Math.round(progress.reduce((s, p) => s + (p.percent || 0), 0) / opens) : 0;
+
+    res.json({
+      opens,
+      completed,
+      completionRate: opens ? Math.round((completed / opens) * 100) : 0,
+      avgProgress,
+      dropOffPages: dropOffAgg.map((d) => ({ page: d._id, readers: d.count })),
+      mostHighlighted: hlAgg.map((h) => ({ page: h._id, highlights: h.count })),
+      totals: { highlights: hlCount, notes: noteCount, bookmarks: bmCount }
+    });
+  } catch (e) {
+    console.error(e);
     res.status(500).json({ message: 'Server error' });
   }
 });

@@ -91,6 +91,14 @@ const Reader = () => {
   const isDouble = mode === 'double';
   const isScroll = mode === 'scroll';
 
+  // Per-book permissions (default allow until access loads). Preview mode is
+  // always read-only regardless of permissions.
+  const perms = access?.permissions || { download: true, highlights: true, notes: true, bookmarks: true, copy: true };
+  const canHighlight = !isPreview && perms.highlights;
+  const canBookmark = !isPreview && perms.bookmarks;
+  const showAnnotations = !isPreview && (perms.highlights || perms.notes || perms.bookmarks);
+  const canDownload = !isPreview && perms.download;
+
   /* ---- load: check access, then load full file (owner) or preview ---- */
   useEffect(() => {
     let revoked = null;
@@ -209,6 +217,13 @@ const Reader = () => {
     return cur;
   }, [outline, pageNumber]);
 
+  // Fall back to admin-defined chapters when the PDF has no embedded outline.
+  useEffect(() => {
+    if (numPages && outline.length === 0 && access?.chapters?.length) {
+      setOutline(access.chapters.filter((c) => c.title && c.page).map((c) => ({ title: c.title, page: c.page, level: 0 })));
+    }
+  }, [numPages, access, outline.length]);
+
   /* ---- in-book search ---- */
   const buildIndex = useCallback(async () => {
     if (pageTextsRef.current) return pageTextsRef.current;
@@ -301,7 +316,7 @@ const Reader = () => {
   /* ---- bookmarks ---- */
   const isBookmarked = bookmarks.some((b) => b.page === pageNumber);
   const toggleBookmark = async () => {
-    if (isPreview) return;
+    if (!canBookmark) return;
     const existing = bookmarks.find((b) => b.page === pageNumber);
     if (existing) {
       setBookmarks((bs) => bs.filter((b) => b._id !== existing._id));
@@ -315,7 +330,7 @@ const Reader = () => {
 
   /* ---- text selection → highlight ---- */
   const onSelectText = useCallback(() => {
-    if (isPreview) return; // highlighting requires ownership
+    if (!canHighlight) return; // needs ownership + highlight permission
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || !sel.toString().trim()) { setToolbar(null); return; }
     const range = sel.getRangeAt(0);
@@ -332,7 +347,7 @@ const Reader = () => {
     if (!rects.length) { setToolbar(null); return; }
     const first = clientRects[0];
     setToolbar({ page, rects, text: sel.toString().trim(), top: first.top, left: first.left + first.width / 2 });
-  }, [isPreview]);
+  }, [canHighlight]);
 
   const createHighlight = async (color) => {
     if (!toolbar) return null;
@@ -509,12 +524,12 @@ const Reader = () => {
           <IconBtn title="Appearance" active={apOpen} onClick={() => { setApOpen((o) => !o); setMoreOpen(false); }}>
             <span className="font-serif text-[15px] leading-none">Aa</span>
           </IconBtn>
-          {!isPreview && <IconBtn name="bookmark" title="Bookmark (B)" active={isBookmarked} onClick={toggleBookmark} />}
-          {!isPreview && <IconBtn name="note" title="Annotations (N)" active={panelOpen} onClick={() => setPanelOpen((o) => !o)} />}
+          {canBookmark && <IconBtn name="bookmark" title="Bookmark (B)" active={isBookmarked} onClick={toggleBookmark} />}
+          {showAnnotations && <IconBtn name="note" title="Annotations (N)" active={panelOpen} onClick={() => setPanelOpen((o) => !o)} />}
           <IconBtn name="expand" title="Full screen (F)" active={fullscreen} onClick={toggleFullscreen} />
           <div className="relative">
             <IconBtn name="more" title="More" active={moreOpen} onClick={() => { setMoreOpen((o) => !o); setApOpen(false); }} />
-            {moreOpen && <MoreMenu onDownload={download} onClose={() => setMoreOpen(false)} />}
+            {moreOpen && <MoreMenu onDownload={download} canDownload={canDownload} onClose={() => setMoreOpen(false)} />}
           </div>
         </div>
       </header>
@@ -537,6 +552,7 @@ const Reader = () => {
           style={{ background: `radial-gradient(circle at 50% 0%, #1a222a 0%, ${themeCfg.area} 70%)` }}
           onMouseUp={onSelectText}
           onTouchEnd={onSelectText}
+          onCopy={(e) => { if (!perms.copy) e.preventDefault(); }}
           onScroll={() => toolbar && setToolbar(null)}
         >
           {loading || !fileUrl ? (
@@ -726,12 +742,16 @@ const AppearanceMenu = ({ theme, setTheme, mode, setMode, fit, setFit, onClose }
   </>
 );
 
-const MoreMenu = ({ onDownload, onClose }) => (
+const MoreMenu = ({ onDownload, canDownload, onClose }) => (
   <>
     <div className="fixed inset-0 z-30" onClick={onClose} />
     <div className="absolute top-11 right-0 z-40 w-56 bg-[#141A1F] border border-[#2A333B] rounded-xl shadow-2xl py-2 text-sm">
-      <button onClick={() => { onDownload(); onClose(); }} className="w-full text-left px-4 py-2 text-[#C6CDD3] hover:bg-white/5">Download PDF</button>
-      <div className="border-t border-[#2A333B] my-1" />
+      {canDownload && (
+        <>
+          <button onClick={() => { onDownload(); onClose(); }} className="w-full text-left px-4 py-2 text-[#C6CDD3] hover:bg-white/5">Download PDF</button>
+          <div className="border-t border-[#2A333B] my-1" />
+        </>
+      )}
       <div className="px-4 py-2 text-xs text-[#7c8690]">
         <p className="font-semibold text-[#A9B1B8] mb-1">Keyboard shortcuts</p>
         ← → pages · Space next · F fullscreen<br />B bookmark · T contents · N notes · +/− zoom

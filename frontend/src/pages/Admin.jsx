@@ -195,6 +195,7 @@ const ManageBooks = () => {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null); // product being sale-edited
   const [editingMeta, setEditingMeta] = useState(null); // product whose details are being edited
+  const [analyticsFor, setAnalyticsFor] = useState(null); // product whose analytics are shown
 
   const load = useCallback(() => {
     setLoading(true);
@@ -274,6 +275,9 @@ const ManageBooks = () => {
                 </button>
               </td>
               <td className="p-3 whitespace-nowrap">
+                <button onClick={() => setAnalyticsFor(b)} className="text-maroon hover:underline mr-3">
+                  Stats
+                </button>
                 <button onClick={() => setEditingMeta(b)} className="text-maroon hover:underline mr-3">
                   Edit
                 </button>
@@ -288,9 +292,89 @@ const ManageBooks = () => {
 
       {editing && <SaleModal product={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />}
       {editingMeta && <EditBookModal product={editingMeta} onClose={() => setEditingMeta(null)} onSaved={() => { setEditingMeta(null); load(); }} />}
+      {analyticsFor && <AnalyticsModal product={analyticsFor} onClose={() => setAnalyticsFor(null)} />}
     </div>
   );
 };
+
+const AnalyticsModal = ({ product, onClose }) => {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    api.get(`/admin/products/${product._id}/analytics`).then((r) => setData(r.data)).catch(() => setErr('Could not load analytics'));
+  }, [product._id]);
+
+  const Stat = ({ label, value, sub }) => (
+    <div className="bg-sand rounded-lg p-4 text-center">
+      <div className="font-display text-2xl font-bold text-maroon">{value}</div>
+      <div className="text-xs text-ink-soft">{label}</div>
+      {sub && <div className="text-[0.65rem] text-ink-soft/70 mt-0.5">{sub}</div>}
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl p-6 w-full max-w-lg max-h-[88vh] overflow-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-maroon">Reading Analytics — {product.title}</h3>
+          <button onClick={onClose} className="text-gray-500 text-xl leading-none">✕</button>
+        </div>
+        {err && <p className="text-red-600 text-sm">{err}</p>}
+        {!data && !err ? (
+          <p className="text-ink-soft text-sm py-8 text-center">Loading…</p>
+        ) : data && (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+              <Stat label="Readers" value={data.opens} />
+              <Stat label="Completed" value={data.completed} />
+              <Stat label="Completion" value={`${data.completionRate}%`} />
+              <Stat label="Avg progress" value={`${data.avgProgress}%`} />
+            </div>
+            {data.opens === 0 ? (
+              <p className="text-sm text-ink-soft text-center py-4">No reading activity yet.</p>
+            ) : (
+              <div className="grid sm:grid-cols-2 gap-5">
+                <div>
+                  <p className="text-sm font-semibold text-maroon mb-2">Drop-off pages</p>
+                  {data.dropOffPages.length === 0 ? <p className="text-xs text-ink-soft">—</p> : (
+                    <ul className="space-y-1 text-sm">
+                      {data.dropOffPages.map((d) => (
+                        <li key={d.page} className="flex justify-between"><span>Page {d.page}</span><span className="text-ink-soft">{d.readers} reader{d.readers === 1 ? '' : 's'}</span></li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-maroon mb-2">Most highlighted pages</p>
+                  {data.mostHighlighted.length === 0 ? <p className="text-xs text-ink-soft">—</p> : (
+                    <ul className="space-y-1 text-sm">
+                      {data.mostHighlighted.map((h) => (
+                        <li key={h.page} className="flex justify-between"><span>Page {h.page}</span><span className="text-ink-soft">{h.highlights} ✎</span></li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            )}
+            <div className="flex gap-4 text-xs text-ink-soft mt-5 border-t pt-3">
+              <span>{data.totals.highlights} highlights</span>
+              <span>{data.totals.notes} notes</span>
+              <span>{data.totals.bookmarks} bookmarks</span>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const PERMS = [
+  ['allowDownload', 'Download', false],
+  ['allowHighlights', 'Highlights', true],
+  ['allowNotes', 'Notes', true],
+  ['allowBookmarks', 'Bookmarks', true],
+  ['allowCopy', 'Copy text', true]
+];
 
 const EditBookModal = ({ product, onClose, onSaved }) => {
   const [form, setForm] = useState({
@@ -298,17 +382,29 @@ const EditBookModal = ({ product, onClose, onSaved }) => {
     author: product.author,
     category: product.category,
     description: product.description,
-    previewPages: product.previewPages ?? 0
+    previewPages: product.previewPages ?? 0,
+    allowDownload: product.allowDownload ?? false,
+    allowHighlights: product.allowHighlights ?? true,
+    allowNotes: product.allowNotes ?? true,
+    allowBookmarks: product.allowBookmarks ?? true,
+    allowCopy: product.allowCopy ?? true
   });
+  const [chapters, setChapters] = useState(product.chapters?.length ? product.chapters.map((c) => ({ ...c })) : []);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const field = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const toggle = (k) => setForm((f) => ({ ...f, [k]: !f[k] }));
+
+  const setChapter = (i, key, val) => setChapters((cs) => cs.map((c, j) => (j === i ? { ...c, [key]: val } : c)));
+  const addChapter = () => setChapters((cs) => [...cs, { title: '', page: '' }]);
+  const removeChapter = (i) => setChapters((cs) => cs.filter((_, j) => j !== i));
 
   const save = async () => {
     setErr('');
     setBusy(true);
     try {
-      await api.put(`/admin/products/${product._id}`, form);
+      const cleanChapters = chapters.filter((c) => c.title && c.page).map((c) => ({ title: c.title, page: Number(c.page) }));
+      await api.put(`/admin/products/${product._id}`, { ...form, chapters: cleanChapters });
       onSaved();
     } catch (e) {
       setErr(e.response?.data?.message || 'Could not save changes');
@@ -319,8 +415,8 @@ const EditBookModal = ({ product, onClose, onSaved }) => {
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl p-6 w-full max-w-md">
-        <h3 className="font-bold text-maroon mb-4">Edit Book Details</h3>
+      <div className="bg-white rounded-xl p-6 w-full max-w-lg max-h-[88vh] overflow-auto">
+        <h3 className="font-bold text-maroon mb-4">Edit Book</h3>
         {err && <p className="text-red-600 text-sm mb-2">{err}</p>}
         <label className="block text-sm font-medium mb-1">Title</label>
         <input value={form.title} onChange={field('title')} className="w-full border rounded-lg px-3 py-2 mb-3" />
@@ -339,7 +435,39 @@ const EditBookModal = ({ product, onClose, onSaved }) => {
         <label className="block text-sm font-medium mb-1">Free preview pages</label>
         <input type="number" min="0" value={form.previewPages} onChange={field('previewPages')} className="w-full border rounded-lg px-3 py-2 mb-3" />
         <label className="block text-sm font-medium mb-1">Description</label>
-        <textarea value={form.description} onChange={field('description')} rows={4} className="w-full border rounded-lg px-3 py-2 mb-4" />
+        <textarea value={form.description} onChange={field('description')} rows={3} className="w-full border rounded-lg px-3 py-2 mb-4" />
+
+        {/* Permissions */}
+        <div className="mb-4">
+          <p className="text-sm font-semibold text-maroon mb-2">Reader permissions</p>
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
+            {PERMS.map(([key, label]) => (
+              <label key={key} className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" checked={form[key]} onChange={() => toggle(key)} className="accent-maroon" />
+                {label}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Manual chapters */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-semibold text-maroon">Chapters (for PDFs without a table of contents)</p>
+            <button onClick={addChapter} className="text-xs text-saffron font-semibold">+ Add</button>
+          </div>
+          {chapters.length === 0 && <p className="text-xs text-ink-soft">None. The PDF's built-in outline is used when available.</p>}
+          <div className="space-y-2">
+            {chapters.map((c, i) => (
+              <div key={i} className="flex gap-2">
+                <input value={c.title} onChange={(e) => setChapter(i, 'title', e.target.value)} placeholder="Chapter title" className="flex-1 border rounded-lg px-2 py-1.5 text-sm" />
+                <input type="number" min="1" value={c.page} onChange={(e) => setChapter(i, 'page', e.target.value)} placeholder="Pg" className="w-16 border rounded-lg px-2 py-1.5 text-sm" />
+                <button onClick={() => removeChapter(i)} className="text-red-500 px-1">✕</button>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div className="flex gap-2 justify-end">
           <button onClick={onClose} className="px-4 py-2 text-gray-600">Cancel</button>
           <button onClick={save} disabled={busy} className="btn btn-primary btn-sm">
