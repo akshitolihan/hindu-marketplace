@@ -197,6 +197,14 @@ h1, h2, h3, h4, .font-display {
 }
 
 /* ---------- Utilities ---------- */
+
+/* In-book search match highlight (rendered inside the PDF text layer). */
+.rd-search {
+  background: rgba(201, 154, 59, 0.55);
+  color: transparent;
+  border-radius: 2px;
+}
+
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;

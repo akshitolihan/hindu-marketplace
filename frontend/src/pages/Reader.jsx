@@ -6,6 +6,7 @@ import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { THEMES, Icon, IconBtn } from '../components/reader/readerUI';
 import { AnnotationsPanel, HighlightToolbar, HighlightLayer } from '../components/reader/annotations';
+import { SearchPanel } from '../components/reader/search';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
 
@@ -64,10 +65,21 @@ const Reader = () => {
   const [chromeVisible, setChromeVisible] = useState(true);
   const [resumeToast, setResumeToast] = useState(null);
 
+  // search
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeResult, setActiveResult] = useState(0);
+  const [searchOpts, setSearchOpts] = useState({ caseSensitive: false, wholeWord: false });
+
   const areaRef = useRef(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
   const progressRef = useRef({ lastPage: 1, saved: 1 });
   const hideTimer = useRef(null);
+  const pdfDocRef = useRef(null);
+  const pageTextsRef = useRef(null);
 
   const themeCfg = THEMES[theme];
   const isDouble = mode === 'double';
@@ -116,6 +128,7 @@ const Reader = () => {
 
   /* ---- document loaded ---- */
   const onDocLoad = useCallback(async (pdf) => {
+    pdfDocRef.current = pdf;
     setNumPages(pdf.numPages);
     try {
       const p1 = await pdf.getPage(1);
@@ -166,6 +179,77 @@ const Reader = () => {
     for (const it of outline) if (it.page && it.page <= pageNumber) cur = it;
     return cur;
   }, [outline, pageNumber]);
+
+  /* ---- in-book search ---- */
+  const buildIndex = useCallback(async () => {
+    if (pageTextsRef.current) return pageTextsRef.current;
+    const pdf = pdfDocRef.current;
+    if (!pdf) return [];
+    const texts = new Array(pdf.numPages + 1).fill('');
+    for (let i = 1; i <= pdf.numPages; i++) {
+      try {
+        const tc = await (await pdf.getPage(i)).getTextContent();
+        texts[i] = tc.items.map((it) => it.str).join(' ');
+      } catch {}
+    }
+    pageTextsRef.current = texts;
+    return texts;
+  }, []);
+
+  const runSearch = useCallback(async (q) => {
+    if (!q || q.trim().length < 2) { setResults([]); setSearchTerm(''); return; }
+    setSearching(true);
+    const texts = await buildIndex();
+    const escd = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = searchOpts.wholeWord ? `\\b${escd}\\b` : escd;
+    const flags = searchOpts.caseSensitive ? 'g' : 'gi';
+    const res = [];
+    for (let i = 1; i < texts.length; i++) {
+      const text = texts[i];
+      if (!text) continue;
+      const re = new RegExp(pattern, flags);
+      let m, count = 0, firstIdx = -1;
+      while ((m = re.exec(text)) !== null) {
+        count++;
+        if (firstIdx < 0) firstIdx = m.index;
+        if (m.index === re.lastIndex) re.lastIndex++;
+        if (count > 500) break;
+      }
+      if (count > 0) {
+        const start = Math.max(0, firstIdx - 40);
+        const snippet = (start > 0 ? '…' : '') + text.slice(start, firstIdx + q.length + 60).trim() + '…';
+        res.push({ page: i, count, snippet });
+      }
+    }
+    setResults(res);
+    setActiveResult(0);
+    setSearchTerm(q);
+    setSearching(false);
+    if (res[0]) { if (isScroll) setMode('single'); goTo(res[0].page); }
+  }, [buildIndex, searchOpts, isScroll, goTo]);
+
+  // Debounced search on query / option change.
+  useEffect(() => {
+    if (!searchOpen) return;
+    const t = setTimeout(() => runSearch(query), 300);
+    return () => clearTimeout(t);
+  }, [query, searchOpts, searchOpen, runSearch]);
+
+  const jumpResult = (idx) => { setActiveResult(idx); const r = results[idx]; if (r) { if (isScroll) setMode('single'); goTo(r.page); } };
+  const nextResult = () => results.length && jumpResult((activeResult + 1) % results.length);
+  const prevResult = () => results.length && jumpResult((activeResult - 1 + results.length) % results.length);
+  const openSearch = () => { setSearchOpen(true); setTocOpen(false); };
+
+  // Highlight search matches on the rendered page via the text layer.
+  const textRenderer = useCallback(
+    (item) => {
+      if (!searchTerm) return item.str;
+      const escd = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(`(${escd})`, searchOpts.caseSensitive ? 'g' : 'gi');
+      return item.str.replace(re, '<mark class="rd-search">$1</mark>');
+    },
+    [searchTerm, searchOpts.caseSensitive]
+  );
 
   /* ---- progress ---- */
   const saveProgress = useCallback((page) => {
@@ -257,8 +341,10 @@ const Reader = () => {
   /* ---- keyboard ---- */
   useEffect(() => {
     const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) { e.preventDefault(); openSearch(); return; }
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       switch (e.key) {
+        case 's': case 'S': openSearch(); break;
         case 'ArrowRight': case 'PageDown': e.preventDefault(); next(); break;
         case 'ArrowLeft': case 'PageUp': e.preventDefault(); prev(); break;
         case ' ': e.preventDefault(); (e.shiftKey ? prev : next)(); break;
@@ -268,7 +354,7 @@ const Reader = () => {
         case 'n': case 'N': setPanelOpen((o) => !o); break;
         case '+': case '=': setFit('width'); setZoom((z) => Math.min(3, +(z + 0.15).toFixed(2))); break;
         case '-': case '_': setZoom((z) => Math.max(0.5, +(z - 0.15).toFixed(2))); break;
-        case 'Escape': setTocOpen(false); setPanelOpen(false); setApOpen(false); setMoreOpen(false); setToolbar(null); if (fullscreen) exitFs(); break;
+        case 'Escape': setTocOpen(false); setPanelOpen(false); setApOpen(false); setMoreOpen(false); setSearchOpen(false); setToolbar(null); if (fullscreen) exitFs(); break;
         default: break;
       }
     };
@@ -309,7 +395,7 @@ const Reader = () => {
   const renderPage = (n, key) => (
     <div key={key} data-reader-page={n} className="relative rounded-sm overflow-hidden shadow-[0_20px_60px_-20px_rgba(0,0,0,0.75)] bg-white">
       <div style={{ filter: themeCfg.pageFilter }}>
-        <Page pageNumber={n} width={pageWidth} renderTextLayer renderAnnotationLayer={false} loading="" />
+        <Page pageNumber={n} width={pageWidth} renderTextLayer renderAnnotationLayer={false} loading="" customTextRenderer={searchTerm ? textRenderer : undefined} />
       </div>
       <HighlightLayer items={highlights.filter((h) => h.page === n)} />
       <div className="absolute inset-0 pointer-events-none z-[6]" style={{ backgroundImage: wmBg, backgroundRepeat: 'repeat' }} />
@@ -322,7 +408,7 @@ const Reader = () => {
         <div className="flex flex-col items-center gap-6 py-6">
           {Array.from({ length: numPages }, (_, i) => (
             <ScrollPage key={i} n={i + 1} width={pageWidth} aspect={aspect} filter={themeCfg.pageFilter} wmBg={wmBg}
-              pageHighlights={highlights.filter((h) => h.page === i + 1)} onVisible={setPageNumber} />
+              pageHighlights={highlights.filter((h) => h.page === i + 1)} textRenderer={searchTerm ? textRenderer : undefined} onVisible={setPageNumber} />
           ))}
         </div>
       );
@@ -368,6 +454,7 @@ const Reader = () => {
             <span className="text-xs tabular-nums text-[#A9B1B8] px-1 whitespace-nowrap">{pageNumber} / {numPages || '–'}</span>
             <IconBtn name="right" title="Next (→)" onClick={next} disabled={pageNumber >= numPages} size={16} />
           </div>
+          <IconBtn name="search" title="Search in book (S)" active={searchOpen} onClick={() => (searchOpen ? setSearchOpen(false) : openSearch())} />
           <IconBtn title="Appearance" active={apOpen} onClick={() => { setApOpen((o) => !o); setMoreOpen(false); }}>
             <span className="font-serif text-[15px] leading-none">Aa</span>
           </IconBtn>
@@ -385,6 +472,13 @@ const Reader = () => {
       <div className="flex-1 flex min-h-0 relative">
         <TocSidebar open={tocOpen} onClose={() => setTocOpen(false)} outline={outline} currentPage={pageNumber}
           onGo={(p) => { goTo(p); if (window.innerWidth < 768) setTocOpen(false); }} />
+
+        <SearchPanel
+          open={searchOpen} onClose={() => setSearchOpen(false)}
+          query={query} setQuery={setQuery} results={results} searching={searching} term={searchTerm}
+          options={searchOpts} setOptions={setSearchOpts} activeIdx={activeResult}
+          onJump={jumpResult} onPrev={prevResult} onNext={nextResult}
+        />
 
         <main
           ref={areaRef}
@@ -449,7 +543,7 @@ const Reader = () => {
 
 /* ================= sub-components ================= */
 
-const ScrollPage = ({ n, width, aspect, filter, wmBg, pageHighlights, onVisible }) => {
+const ScrollPage = ({ n, width, aspect, filter, wmBg, pageHighlights, textRenderer, onVisible }) => {
   const ref = useRef(null);
   const [show, setShow] = useState(n <= 3);
   useEffect(() => {
@@ -468,7 +562,7 @@ const ScrollPage = ({ n, width, aspect, filter, wmBg, pageHighlights, onVisible 
       {show ? (
         <>
           <div style={{ filter }}>
-            <Page pageNumber={n} width={width} renderTextLayer renderAnnotationLayer={false} loading="" />
+            <Page pageNumber={n} width={width} renderTextLayer renderAnnotationLayer={false} loading="" customTextRenderer={textRenderer} />
           </div>
           <HighlightLayer items={pageHighlights} />
           <div className="absolute inset-0 pointer-events-none z-[6]" style={{ backgroundImage: wmBg, backgroundRepeat: 'repeat' }} />

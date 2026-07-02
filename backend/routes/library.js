@@ -1,13 +1,15 @@
 const express = require('express');
 const User = require('../models/User');
 const Product = require('../models/Product');
+const ReadingProgress = require('../models/ReadingProgress');
 const auth = require('../middleware/auth');
 const { signedPdfUrl } = require('../utils/cloudinaryStorage');
 
 const router = express.Router();
 
 // @route GET /api/library
-// The authenticated user's owned books (catalog fields only — no file refs).
+// The authenticated user's owned books, enriched with reading progress
+// (last page, %, status, last-read time) for the library UI. No file refs.
 router.get('/', auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).populate({
@@ -16,12 +18,27 @@ router.get('/', auth, async (req, res) => {
     });
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    const books = user.purchasedProducts
-      .filter((p) => p.product) // skip books that were later deleted
-      .map((p) => ({
+    const owned = user.purchasedProducts.filter((p) => p.product);
+    const progressList = await ReadingProgress.find({
+      user: req.user.id,
+      product: { $in: owned.map((p) => p.product._id) }
+    });
+    const progressByProduct = new Map(progressList.map((pr) => [pr.product.toString(), pr]));
+
+    const books = owned.map((p) => {
+      const pr = progressByProduct.get(p.product._id.toString());
+      return {
         ...p.product.toObject(),
-        purchasedAt: p.purchasedAt
-      }));
+        purchasedAt: p.purchasedAt,
+        progress: {
+          lastPage: pr?.lastPage || 1,
+          totalPages: pr?.totalPages || 0,
+          percent: pr?.percent || 0,
+          status: pr?.status || 'not_started',
+          lastReadAt: pr?.lastReadAt || null
+        }
+      };
+    });
 
     res.json(books);
   } catch (error) {
