@@ -27,7 +27,13 @@ const Reader = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const title = location.state?.title || 'Reading';
+  const [title, setTitle] = useState(location.state?.title || 'Reading');
+  // If opened via a direct link (no navigation state), fetch the book's title.
+  useEffect(() => {
+    if (!location.state?.title) {
+      api.get(`/products/${id}`).then((r) => r.data?.title && setTitle(r.data.title)).catch(() => {});
+    }
+  }, [id, location.state]);
 
   // ---- document / file ----
   const [fileUrl, setFileUrl] = useState(null);
