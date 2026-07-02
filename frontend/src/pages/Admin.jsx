@@ -82,7 +82,7 @@ const Dashboard = () => {
 
 /* ---------------- Upload Book ---------------- */
 const UploadBook = ({ onDone }) => {
-  const empty = { title: '', author: 'OSHO', category: 'Gita', price: '', description: '' };
+  const empty = { title: '', author: 'OSHO', category: 'Gita', price: '', previewPages: '0', description: '' };
   const [form, setForm] = useState(empty);
   const [pdf, setPdf] = useState(null);
   const [cover, setCover] = useState(null);
@@ -144,17 +144,16 @@ const UploadBook = ({ onDone }) => {
         </div>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium mb-1">Price (₹) *</label>
-        <input
-          type="number"
-          min="0"
-          step="1"
-          value={form.price}
-          onChange={field('price')}
-          required
-          className="w-full border rounded-lg px-3 py-2"
-        />
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Price (₹) *</label>
+          <input type="number" min="0" step="1" value={form.price} onChange={field('price')} required className="w-full border rounded-lg px-3 py-2" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Free preview pages</label>
+          <input type="number" min="0" step="1" value={form.previewPages} onChange={field('previewPages')} className="w-full border rounded-lg px-3 py-2" />
+          <p className="text-xs text-ink-soft mt-1">0 = no preview. Non-owners can read this many pages free.</p>
+        </div>
       </div>
 
       <div>
@@ -298,7 +297,8 @@ const EditBookModal = ({ product, onClose, onSaved }) => {
     title: product.title,
     author: product.author,
     category: product.category,
-    description: product.description
+    description: product.description,
+    previewPages: product.previewPages ?? 0
   });
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -336,6 +336,8 @@ const EditBookModal = ({ product, onClose, onSaved }) => {
             </select>
           </div>
         </div>
+        <label className="block text-sm font-medium mb-1">Free preview pages</label>
+        <input type="number" min="0" value={form.previewPages} onChange={field('previewPages')} className="w-full border rounded-lg px-3 py-2 mb-3" />
         <label className="block text-sm font-medium mb-1">Description</label>
         <textarea value={form.description} onChange={field('description')} rows={4} className="w-full border rounded-lg px-3 py-2 mb-4" />
         <div className="flex gap-2 justify-end">

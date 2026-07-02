@@ -4,6 +4,8 @@ import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/TextLayer.css';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { useCart } from '../context/CartContext';
+import { formatINR } from '../utils/format';
 import { THEMES, Icon, IconBtn } from '../components/reader/readerUI';
 import { AnnotationsPanel, HighlightToolbar, HighlightLayer } from '../components/reader/annotations';
 import { SearchPanel } from '../components/reader/search';
@@ -25,7 +27,11 @@ const Reader = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
+  const { addToCart } = useCart();
   const [title, setTitle] = useState(location.state?.title || 'Reading');
+  const [access, setAccess] = useState(null);
+  const [isPreview, setIsPreview] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
   useEffect(() => {
     if (!location.state?.title) {
       api.get(`/products/${id}`).then((r) => r.data?.title && setTitle(r.data.title)).catch(() => {});
@@ -85,35 +91,55 @@ const Reader = () => {
   const isDouble = mode === 'double';
   const isScroll = mode === 'scroll';
 
-  /* ---- load everything ---- */
+  /* ---- load: check access, then load full file (owner) or preview ---- */
   useEffect(() => {
     let revoked = null;
     setLoading(true);
-    Promise.all([
-      api.get(`/library/${id}/file`, { responseType: 'blob' }),
-      api.get(`/reader/${id}/progress`).catch(() => ({ data: null })),
-      api.get(`/reader/${id}/bookmarks`).catch(() => ({ data: [] })),
-      api.get(`/reader/${id}/highlights`).catch(() => ({ data: [] })),
-      api.get(`/reader/${id}/notes`).catch(() => ({ data: [] }))
-    ])
-      .then(([fileRes, progRes, bmRes, hlRes, noteRes]) => {
-        const b = fileRes.data;
-        setBlob(b);
-        const url = URL.createObjectURL(b);
-        revoked = url;
-        setFileUrl(url);
-        setBookmarks(bmRes.data || []);
-        setHighlights(hlRes.data || []);
-        setNotes(noteRes.data || []);
-        const saved = progRes.data?.lastPage;
-        if (saved && saved > 1) {
-          progressRef.current.lastPage = saved;
-          setResumeToast(saved);
-          setTimeout(() => setResumeToast(null), 4500);
+    (async () => {
+      try {
+        const { data: acc } = await api.get(`/reader/${id}/access`);
+        setAccess(acc);
+        if (acc.title) setTitle(acc.title);
+
+        if (acc.owned) {
+          const [fileRes, progRes, bmRes, hlRes, noteRes] = await Promise.all([
+            api.get(`/library/${id}/file`, { responseType: 'blob' }),
+            api.get(`/reader/${id}/progress`).catch(() => ({ data: null })),
+            api.get(`/reader/${id}/bookmarks`).catch(() => ({ data: [] })),
+            api.get(`/reader/${id}/highlights`).catch(() => ({ data: [] })),
+            api.get(`/reader/${id}/notes`).catch(() => ({ data: [] }))
+          ]);
+          const b = fileRes.data;
+          setBlob(b);
+          const url = URL.createObjectURL(b);
+          revoked = url;
+          setFileUrl(url);
+          setBookmarks(bmRes.data || []);
+          setHighlights(hlRes.data || []);
+          setNotes(noteRes.data || []);
+          const saved = progRes.data?.lastPage;
+          if (saved && saved > 1) {
+            progressRef.current.lastPage = saved;
+            setResumeToast(saved);
+            setTimeout(() => setResumeToast(null), 4500);
+          }
+        } else if (acc.previewPages > 0) {
+          setIsPreview(true);
+          const fileRes = await api.get(`/reader/${id}/preview-file`, { responseType: 'blob' });
+          const b = fileRes.data;
+          setBlob(b);
+          const url = URL.createObjectURL(b);
+          revoked = url;
+          setFileUrl(url);
+        } else {
+          setError('locked');
         }
-      })
-      .catch((e) => setError(e.response?.status === 403 ? 'You do not own this book.' : 'Could not load the book.'))
-      .finally(() => setLoading(false));
+      } catch (e) {
+        setError(e.response?.status === 403 ? 'You do not own this book.' : 'Could not load the book.');
+      } finally {
+        setLoading(false);
+      }
+    })();
     return () => revoked && URL.revokeObjectURL(revoked);
   }, [id]);
 
@@ -170,7 +196,10 @@ const Reader = () => {
   const clampPage = useCallback((p) => Math.min(Math.max(1, p), numPages || 1), [numPages]);
   const stepN = isDouble ? 2 : 1;
   const goTo = useCallback((p) => setPageNumber(clampPage(p)), [clampPage]);
-  const next = useCallback(() => setPageNumber((p) => clampPage(p + stepN)), [clampPage, stepN]);
+  const next = useCallback(() => {
+    if (isPreview && pageNumber >= numPages) { setShowPaywall(true); return; }
+    setPageNumber((p) => clampPage(p + stepN));
+  }, [clampPage, stepN, isPreview, pageNumber, numPages]);
   const prev = useCallback(() => setPageNumber((p) => clampPage(p - stepN)), [clampPage, stepN]);
   const jumpTo = (p) => { if (isScroll) setMode('single'); goTo(p); };
 
@@ -253,10 +282,10 @@ const Reader = () => {
 
   /* ---- progress ---- */
   const saveProgress = useCallback((page) => {
-    if (!numPages || page === progressRef.current.saved) return;
+    if (isPreview || !numPages || page === progressRef.current.saved) return;
     progressRef.current.saved = page;
     api.put(`/reader/${id}/progress`, { page, totalPages: numPages }).catch(() => {});
-  }, [id, numPages]);
+  }, [id, numPages, isPreview]);
   useEffect(() => {
     if (!numPages) return;
     const t = setTimeout(() => saveProgress(pageNumber), 1200);
@@ -272,6 +301,7 @@ const Reader = () => {
   /* ---- bookmarks ---- */
   const isBookmarked = bookmarks.some((b) => b.page === pageNumber);
   const toggleBookmark = async () => {
+    if (isPreview) return;
     const existing = bookmarks.find((b) => b.page === pageNumber);
     if (existing) {
       setBookmarks((bs) => bs.filter((b) => b._id !== existing._id));
@@ -285,6 +315,7 @@ const Reader = () => {
 
   /* ---- text selection → highlight ---- */
   const onSelectText = useCallback(() => {
+    if (isPreview) return; // highlighting requires ownership
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || !sel.toString().trim()) { setToolbar(null); return; }
     const range = sel.getRangeAt(0);
@@ -301,7 +332,7 @@ const Reader = () => {
     if (!rects.length) { setToolbar(null); return; }
     const first = clientRects[0];
     setToolbar({ page, rects, text: sel.toString().trim(), top: first.top, left: first.left + first.width / 2 });
-  }, []);
+  }, [isPreview]);
 
   const createHighlight = async (color) => {
     if (!toolbar) return null;
@@ -388,6 +419,11 @@ const Reader = () => {
     URL.revokeObjectURL(a.href);
   };
 
+  const buyBook = async () => {
+    try { await addToCart(id); } catch {}
+    navigate('/cart');
+  };
+
   const percent = numPages ? Math.round((pageNumber / numPages) * 100) : 0;
   const wmBg = useMemo(() => (user ? `url("${watermarkTile(user.email || user.name || '', theme === 'dark')}")` : 'none'), [user, theme]);
 
@@ -424,6 +460,21 @@ const Reader = () => {
     return <div className="flex justify-center py-6">{renderPage(pageNumber, 'S')}</div>;
   };
 
+  if (error === 'locked') {
+    return (
+      <div className="fixed inset-0 bg-[#0b0f12] text-[#F5F2EA] grid place-items-center px-4">
+        <div className="text-center max-w-sm">
+          <div className="text-5xl mb-3">🔒</div>
+          <h2 className="font-display text-2xl mb-2">This book is locked</h2>
+          <p className="mb-6 text-[#A9B1B8]">You need to purchase this book to read it.</p>
+          <div className="flex gap-3 justify-center">
+            <button onClick={() => navigate(`/books/${id}`)} className="px-5 py-2 rounded-full bg-gold text-[#0b0f12] font-semibold">View & Buy</button>
+            <button onClick={() => navigate('/my-library')} className="px-5 py-2 rounded-full bg-white/10 hover:bg-white/20">My Library</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (error) {
     return (
       <div className="fixed inset-0 bg-[#0b0f12] text-[#F5F2EA] grid place-items-center px-4">
@@ -458,8 +509,8 @@ const Reader = () => {
           <IconBtn title="Appearance" active={apOpen} onClick={() => { setApOpen((o) => !o); setMoreOpen(false); }}>
             <span className="font-serif text-[15px] leading-none">Aa</span>
           </IconBtn>
-          <IconBtn name="bookmark" title="Bookmark (B)" active={isBookmarked} onClick={toggleBookmark} />
-          <IconBtn name="note" title="Annotations (N)" active={panelOpen} onClick={() => setPanelOpen((o) => !o)} />
+          {!isPreview && <IconBtn name="bookmark" title="Bookmark (B)" active={isBookmarked} onClick={toggleBookmark} />}
+          {!isPreview && <IconBtn name="note" title="Annotations (N)" active={panelOpen} onClick={() => setPanelOpen((o) => !o)} />}
           <IconBtn name="expand" title="Full screen (F)" active={fullscreen} onClick={toggleFullscreen} />
           <div className="relative">
             <IconBtn name="more" title="More" active={moreOpen} onClick={() => { setMoreOpen((o) => !o); setApOpen(false); }} />
@@ -519,7 +570,41 @@ const Reader = () => {
             ↩ Resumed at page {resumeToast} · <span className="text-gold">restart</span>
           </button>
         )}
+
+        {/* Preview banner */}
+        {isPreview && !showPaywall && (
+          <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 bg-[#141A1F] border border-gold/40 px-4 py-2 rounded-full shadow-xl animate-fade-up">
+            <span className="text-sm text-[#C6CDD3]">🔓 Free preview · {access?.previewPages} pages</span>
+            <button onClick={() => setShowPaywall(true)} className="text-sm bg-gold text-[#0b0f12] font-semibold px-3 py-1 rounded-full hover:brightness-105">
+              Unlock full book
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Paywall overlay */}
+      {showPaywall && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm grid place-items-center px-4">
+          <div className="bg-[#141A1F] border border-[#2A333B] rounded-2xl max-w-md w-full p-8 text-center shadow-2xl">
+            <div className="mx-auto w-24 h-32 rounded-lg overflow-hidden bg-[#0e1318] mb-5 grid place-items-center">
+              {access?.coverImage ? <img src={access.coverImage} alt="" className="w-full h-full object-contain" /> : <span className="text-4xl">📖</span>}
+            </div>
+            <h2 className="font-display text-2xl text-cream mb-2">Continue reading</h2>
+            <p className="text-[#A9B1B8] mb-5 text-sm leading-relaxed">
+              You've reached the end of the free preview. Unlock <span className="text-gold">{title}</span> to read the full book, highlight, take notes, and sync your progress.
+            </p>
+            <div className="font-display text-3xl font-bold text-gold">{formatINR(access?.effectivePrice)}</div>
+            {access?.onSale && <div className="text-sm text-[#7c8690] line-through mb-1">{formatINR(access.price)}</div>}
+            <button onClick={buyBook} className="w-full bg-gradient-to-r from-gold-light to-gold text-[#0b0f12] font-semibold py-3 rounded-full my-4 hover:brightness-105">
+              Unlock Full Book
+            </button>
+            <div className="flex gap-3">
+              <button onClick={() => setShowPaywall(false)} className="flex-1 py-2 rounded-full bg-white/10 text-[#C6CDD3] hover:bg-white/15 text-sm">Keep previewing</button>
+              <button onClick={() => navigate(`/books/${id}`)} className="flex-1 py-2 rounded-full bg-white/10 text-[#C6CDD3] hover:bg-white/15 text-sm">Book details</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Floating highlight toolbar */}
       {toolbar && <HighlightToolbar pos={toolbar} onColor={createHighlight} onNote={highlightThenNote} />}

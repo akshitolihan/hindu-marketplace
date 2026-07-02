@@ -1,14 +1,81 @@
 const express = require('express');
+const { PDFDocument } = require('pdf-lib');
 const User = require('../models/User');
+const Product = require('../models/Product');
 const ReadingProgress = require('../models/ReadingProgress');
 const Bookmark = require('../models/Bookmark');
 const Highlight = require('../models/Highlight');
 const Note = require('../models/Note');
 const auth = require('../middleware/auth');
+const { signedPdfUrl } = require('../utils/cloudinaryStorage');
 
 const router = express.Router();
 
 const COLORS = ['yellow', 'blue', 'green', 'pink', 'purple'];
+
+async function userOwns(userId, productId) {
+  const user = await User.findById(userId).select('purchasedProducts');
+  return !!user?.purchasedProducts.some((p) => p.product.toString() === productId);
+}
+
+/* ---------------- Access + preview ---------------- */
+
+// Tells the reader whether the user owns the book, and its preview allowance +
+// pricing (so a non-owner can read a free preview and see the paywall).
+router.get('/:productId/access', auth, async (req, res) => {
+  try {
+    const product = await Product.findOne({ _id: req.params.productId, isPublished: true }).select(
+      'title author coverImage price salePrice saleEndsAt previewPages'
+    );
+    if (!product) return res.status(404).json({ message: 'Book not found' });
+    const owned = await userOwns(req.user.id, req.params.productId);
+    res.json({
+      owned,
+      previewPages: product.previewPages || 0,
+      title: product.title,
+      author: product.author,
+      coverImage: product.coverImage,
+      price: product.price,
+      salePrice: product.salePrice,
+      onSale: product.onSale,
+      effectivePrice: product.effectivePrice
+    });
+  } catch (e) {
+    res.status(404).json({ message: 'Book not found' });
+  }
+});
+
+// Streams a PDF containing only the first N (previewPages) pages — so a
+// non-owner can sample the book without receiving the full file.
+router.get('/:productId/preview-file', auth, async (req, res) => {
+  try {
+    const product = await Product.findById(req.params.productId).select('+pdfPublicId previewPages title isPublished');
+    if (!product || !product.isPublished || !product.previewPages || product.previewPages < 1) {
+      return res.status(404).json({ message: 'No preview available for this book' });
+    }
+    const signed = signedPdfUrl(product.pdfPublicId, 120);
+    const upstream = await fetch(signed);
+    if (!upstream.ok) return res.status(502).json({ message: 'Could not retrieve the book' });
+
+    const fullBytes = Buffer.from(await upstream.arrayBuffer());
+    const srcDoc = await PDFDocument.load(fullBytes, { ignoreEncryption: true });
+    const total = srcDoc.getPageCount();
+    const n = Math.min(product.previewPages, total);
+    const previewDoc = await PDFDocument.create();
+    const copied = await previewDoc.copyPages(srcDoc, Array.from({ length: n }, (_, i) => i));
+    copied.forEach((p) => previewDoc.addPage(p));
+    const out = Buffer.from(await previewDoc.save());
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="preview.pdf"');
+    res.setHeader('Content-Length', out.length);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.send(out);
+  } catch (e) {
+    console.error('preview error:', e.message);
+    res.status(500).json({ message: 'Could not build preview' });
+  }
+});
 
 // Guard: every reader route requires that the user OWNS the book. Attaches
 // req.productId for handlers.

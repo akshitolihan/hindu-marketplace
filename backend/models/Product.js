@@ -55,6 +55,12 @@ const productSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  // Number of pages non-owners may read for free (0 = no preview).
+  previewPages: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   createdAt: {
     type: Date,
     default: Date.now

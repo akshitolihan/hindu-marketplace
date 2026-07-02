@@ -109,6 +109,14 @@ const BookDetail = () => {
                   Buy Now
                 </button>
               </div>
+              {product.previewPages > 0 && (
+                <button
+                  onClick={() => navigate(`/read/${product._id}`, { state: { title: product.title } })}
+                  className="mt-3 w-full text-center text-sm font-semibold text-maroon hover:text-saffron transition-colors"
+                >
+                  📖 Read a free {product.previewPages}-page preview →
+                </button>
+              )}
               <p className="text-xs text-ink-soft/70 mt-4 text-center sm:text-left">
                 🔒 Secure checkout · Instant access in your library
               </p>

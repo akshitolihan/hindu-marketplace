@@ -51,6 +51,7 @@ router.post(
         category: req.body.category,
         price: Number(req.body.price),
         author: req.body.author || 'OSHO',
+        previewPages: Math.max(0, parseInt(req.body.previewPages, 10) || 0),
         pdfUrl: pdfResult.secure_url,
         pdfPublicId: pdfResult.public_id,
         coverImage: coverResult ? coverResult.secure_url : ''
@@ -98,6 +99,7 @@ router.put('/products/:id', async (req, res) => {
       product.price = price;
     }
     if (req.body.isPublished !== undefined) product.isPublished = !!req.body.isPublished;
+    if (req.body.previewPages !== undefined) product.previewPages = Math.max(0, parseInt(req.body.previewPages, 10) || 0);
 
     await product.save();
     res.json({ message: 'Product updated', product });
