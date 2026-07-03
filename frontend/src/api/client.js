@@ -30,8 +30,10 @@ api.interceptors.response.use(
       localStorage.removeItem('token');
     }
 
-    // Retry idempotent GETs while the backend is waking up.
-    const wakingUp = status === 502 || status === 503 || status === 504 || !err.response;
+    // Retry idempotent GETs while the backend is waking up — but not on an
+    // explicit request timeout (retrying a long request just stacks the wait).
+    const timedOut = err.code === 'ECONNABORTED';
+    const wakingUp = !timedOut && (status === 502 || status === 503 || status === 504 || !err.response);
     if (config && (config.method || 'get').toLowerCase() === 'get' && wakingUp) {
       config.__retryCount = config.__retryCount || 0;
       if (config.__retryCount < MAX_RETRIES) {

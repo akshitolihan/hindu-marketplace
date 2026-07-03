@@ -44,6 +44,7 @@ const Reader = () => {
   const [numPages, setNumPages] = useState(0);
   const [aspect, setAspect] = useState(1.414);
   const [loading, setLoading] = useState(true);
+  const [slowLoad, setSlowLoad] = useState(false); // taking longer than usual
   const [error, setError] = useState('');
 
   // reading state
@@ -105,6 +106,13 @@ const Reader = () => {
   useEffect(() => {
     let revoked = null;
     setLoading(true);
+    setSlowLoad(false);
+    setError('');
+    // If loading drags on (e.g. free-tier server waking up), tell the user.
+    const slowTimer = setTimeout(() => setSlowLoad(true), 9000);
+    // The book PDF can be large and the server may cold-start; give it a
+    // generous cap so a genuine stall fails gracefully instead of hanging.
+    const fileOpts = { responseType: 'blob', timeout: 90000 };
     (async () => {
       try {
         const { data: acc } = await api.get(`/reader/${id}/access`);
@@ -113,7 +121,7 @@ const Reader = () => {
 
         if (acc.owned) {
           const [fileRes, progRes, bmRes, hlRes, noteRes] = await Promise.all([
-            api.get(`/library/${id}/file`, { responseType: 'blob' }),
+            api.get(`/library/${id}/file`, fileOpts),
             api.get(`/reader/${id}/progress`).catch(() => ({ data: null })),
             api.get(`/reader/${id}/bookmarks`).catch(() => ({ data: [] })),
             api.get(`/reader/${id}/highlights`).catch(() => ({ data: [] })),
@@ -135,7 +143,7 @@ const Reader = () => {
           }
         } else if (acc.previewPages > 0) {
           setIsPreview(true);
-          const fileRes = await api.get(`/reader/${id}/preview-file`, { responseType: 'blob' });
+          const fileRes = await api.get(`/reader/${id}/preview-file`, fileOpts);
           const b = fileRes.data;
           setBlob(b);
           const url = URL.createObjectURL(b);
@@ -147,10 +155,11 @@ const Reader = () => {
       } catch (e) {
         setError(e.response?.status === 403 ? 'You do not own this book.' : 'Could not load the book.');
       } finally {
+        clearTimeout(slowTimer);
         setLoading(false);
       }
     })();
-    return () => revoked && URL.revokeObjectURL(revoked);
+    return () => { clearTimeout(slowTimer); revoked && URL.revokeObjectURL(revoked); };
   }, [id]);
 
   /* ---- responsive area (debounced so panel open/close doesn't re-render the
@@ -625,10 +634,18 @@ const Reader = () => {
           onScroll={() => toolbar && setToolbar(null)}
         >
           {loading || !fileUrl ? (
-            <div className="h-full grid place-items-center text-[#A9B1B8]">
-              <div className="text-center">
+            <div className="h-full grid place-items-center text-[#A9B1B8] px-6">
+              <div className="text-center max-w-sm">
                 <div className="h-10 w-10 mx-auto mb-4 rounded-full border-2 border-gold border-t-transparent animate-spin" />
-                Preparing your book…
+                {slowLoad ? (
+                  <>
+                    <p className="text-[#C6CDD3]">Waking up the library…</p>
+                    <p className="text-sm mt-1 text-[#7c8690]">This can take up to a minute on the first open after a while.</p>
+                    <button onClick={() => window.location.reload()} className="mt-4 px-4 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-sm">Retry</button>
+                  </>
+                ) : (
+                  'Preparing your book…'
+                )}
               </div>
             </div>
           ) : (
