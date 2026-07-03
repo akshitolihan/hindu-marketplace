@@ -164,7 +164,7 @@ const Reader = () => {
       setSize((s) => (s.w === w && s.h === h ? s : { w, h }));
     };
     measure(); // immediate first measure
-    const debounced = () => { clearTimeout(t); t = setTimeout(measure, 180); };
+    const debounced = () => { clearTimeout(t); t = setTimeout(measure, 80); };
     const ro = new ResizeObserver(debounced);
     if (areaRef.current) ro.observe(areaRef.current);
     return () => { clearTimeout(t); ro.disconnect(); };
@@ -748,7 +748,7 @@ const TocSidebar = ({ open, onClose, outline, currentPage, onGo }) => {
   const [q, setQ] = useState('');
   const items = outline.filter((it) => it.title.toLowerCase().includes(q.toLowerCase()));
   return (
-    <aside className={`${open ? 'w-72' : 'w-0'} bg-[#171E24] border-r border-[#2A333B] overflow-hidden transition-[width] duration-300 z-20 absolute left-0 top-0 h-full shadow-2xl`}>
+    <aside className={`${open ? 'w-72' : 'w-0'} flex-shrink-0 bg-[#171E24] border-r border-[#2A333B] overflow-hidden z-20 absolute md:relative left-0 top-0 h-full shadow-2xl md:shadow-none`}>
       <div className="w-72 h-full flex flex-col">
         <div className="flex items-center justify-between px-4 h-14 border-b border-[#2A333B]">
           <span className="font-display text-lg truncate">Contents</span>

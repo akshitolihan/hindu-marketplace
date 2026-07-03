@@ -83,7 +83,7 @@ export const AnnotationsPanel = ({
   const copy = (t) => navigator.clipboard?.writeText(t);
 
   return (
-    <aside className={`${open ? 'w-80' : 'w-0'} bg-[#171E24] border-l border-[#2A333B] overflow-hidden transition-[width] duration-300 z-20 absolute right-0 top-0 h-full shadow-2xl`}>
+    <aside className={`${open ? 'w-80' : 'w-0'} flex-shrink-0 bg-[#171E24] border-l border-[#2A333B] overflow-hidden z-20 absolute md:relative right-0 top-0 h-full shadow-2xl md:shadow-none`}>
       <div className="w-80 h-full flex flex-col">
         <div className="flex items-center justify-between px-4 h-14 border-b border-[#2A333B]">
           <span className="font-display text-lg">Annotations</span>
