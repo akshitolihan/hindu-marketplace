@@ -151,13 +151,21 @@ const Reader = () => {
     return () => revoked && URL.revokeObjectURL(revoked);
   }, [id]);
 
-  /* ---- responsive area ---- */
+  /* ---- responsive area (debounced so panel open/close doesn't re-render the
+         PDF canvas on every animation frame → no flicker) ---- */
   useEffect(() => {
-    const update = () => areaRef.current && setSize({ w: areaRef.current.clientWidth, h: areaRef.current.clientHeight });
-    update();
-    const ro = new ResizeObserver(update);
+    let t;
+    const measure = () => {
+      if (!areaRef.current) return;
+      const w = areaRef.current.clientWidth;
+      const h = areaRef.current.clientHeight;
+      setSize((s) => (s.w === w && s.h === h ? s : { w, h }));
+    };
+    measure(); // immediate first measure
+    const debounced = () => { clearTimeout(t); t = setTimeout(measure, 180); };
+    const ro = new ResizeObserver(debounced);
     if (areaRef.current) ro.observe(areaRef.current);
-    return () => ro.disconnect();
+    return () => { clearTimeout(t); ro.disconnect(); };
   }, [fileUrl]);
 
   /* ---- document loaded ---- */
@@ -679,7 +687,7 @@ const TocSidebar = ({ open, onClose, outline, currentPage, onGo }) => {
   const [q, setQ] = useState('');
   const items = outline.filter((it) => it.title.toLowerCase().includes(q.toLowerCase()));
   return (
-    <aside className={`${open ? 'w-72' : 'w-0'} flex-shrink-0 bg-[#171E24] border-r border-[#2A333B] overflow-hidden transition-[width] duration-300 z-20 absolute md:relative h-full`}>
+    <aside className={`${open ? 'w-72' : 'w-0'} bg-[#171E24] border-r border-[#2A333B] overflow-hidden transition-[width] duration-300 z-20 absolute left-0 top-0 h-full shadow-2xl`}>
       <div className="w-72 h-full flex flex-col">
         <div className="flex items-center justify-between px-4 h-14 border-b border-[#2A333B]">
           <span className="font-display text-lg truncate">Contents</span>
