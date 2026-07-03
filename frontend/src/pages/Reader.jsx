@@ -67,6 +67,7 @@ const Reader = () => {
   const [apOpen, setApOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [outline, setOutline] = useState([]);
+  const [noEmbedded, setNoEmbedded] = useState(false); // PDF has no built-in TOC
   const [fullscreen, setFullscreen] = useState(false);
   const [chromeVisible, setChromeVisible] = useState(true);
   const [resumeToast, setResumeToast] = useState(null);
@@ -86,6 +87,7 @@ const Reader = () => {
   const hideTimer = useRef(null);
   const pdfDocRef = useRef(null);
   const pageTextsRef = useRef(null);
+  const autoDetectedRef = useRef(false);
 
   const themeCfg = THEMES[theme];
   const isDouble = mode === 'double';
@@ -182,7 +184,10 @@ const Reader = () => {
     try {
       const raw = await pdf.getOutline();
       if (raw?.length) setOutline(await flattenOutline(pdf, raw, 0));
-    } catch {}
+      else setNoEmbedded(true);
+    } catch {
+      setNoEmbedded(true);
+    }
   }, []);
 
   async function flattenOutline(pdf, items, level) {
@@ -225,12 +230,68 @@ const Reader = () => {
     return cur;
   }, [outline, pageNumber]);
 
-  // Fall back to admin-defined chapters when the PDF has no embedded outline.
-  useEffect(() => {
-    if (numPages && outline.length === 0 && access?.chapters?.length) {
-      setOutline(access.chapters.filter((c) => c.title && c.page).map((c) => ({ title: c.title, page: c.page, level: 0 })));
+  // Auto-detect chapters from the text when a PDF has no embedded outline:
+  // treat lines that are notably larger than the body font, or that match
+  // heading patterns ("Chapter 3", "Part II", "1. Title"), as chapter starts.
+  const autoDetectChapters = useCallback(async () => {
+    const pdf = pdfDocRef.current;
+    if (!pdf) return;
+    const lines = [];
+    const sizeWeight = {};
+    const maxPages = Math.min(pdf.numPages, 500);
+    for (let i = 1; i <= maxPages; i++) {
+      let items;
+      try { items = (await (await pdf.getPage(i)).getTextContent()).items; } catch { continue; }
+      let cur = null;
+      const flush = () => { if (cur && cur.text.trim()) lines.push(cur); cur = null; };
+      for (const it of items) {
+        const str = it.str || '';
+        const size = Math.round((it.height || Math.abs(it.transform?.[3]) || 0) * 10) / 10;
+        const y = Math.round(it.transform?.[5] || 0);
+        if (str.trim()) {
+          const rs = Math.round(size);
+          sizeWeight[rs] = (sizeWeight[rs] || 0) + str.trim().length;
+          if (cur && Math.abs(cur.y - y) <= 2 && Math.abs(cur.size - size) <= 0.6) cur.text += str;
+          else { flush(); cur = { page: i, text: str, size, y }; }
+        }
+        if (it.hasEOL) flush();
+      }
+      flush();
     }
-  }, [numPages, access, outline.length]);
+    // Body font = the size carrying the most characters.
+    const bodySize = Number(Object.entries(sizeWeight).sort((a, b) => b[1] - a[1])[0]?.[0] || 12);
+    const headWord = /^(chapter|part|section|prologue|epilogue|introduction|preface|foreword|afterword|appendix|conclusion)\b/i;
+    const numbered = /^(\d{1,3}[.):]\s+\S|[IVXLCM]{1,7}[.):]\s+\S)/;
+    const found = [];
+    const seen = new Set();
+    for (const l of lines) {
+      const t = l.text.replace(/\s+/g, ' ').trim();
+      if (t.length < 3 || t.length > 100) continue;
+      if (/^\d+$/.test(t) || /^page\s+\d+$/i.test(t)) continue;
+      const bigger = l.size >= bodySize * 1.22;
+      if (!bigger && !headWord.test(t) && !numbered.test(t)) continue;
+      const key = t.toLowerCase().slice(0, 60) + '@' + l.page;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      found.push({ title: t, page: l.page, size: l.size });
+    }
+    if (!found.length) return;
+    const sizes = [...new Set(found.map((f) => f.size))].sort((a, b) => b - a);
+    setOutline(found.slice(0, 400).map((f) => ({ title: f.title, page: f.page, level: Math.min(2, sizes.indexOf(f.size)) })));
+  }, []);
+
+  // Resolve the table of contents once we know the PDF has no embedded outline:
+  // prefer admin-defined chapters, otherwise auto-detect from the text.
+  useEffect(() => {
+    if (!noEmbedded || outline.length || autoDetectedRef.current) return;
+    if (access?.chapters?.length) {
+      autoDetectedRef.current = true;
+      setOutline(access.chapters.filter((c) => c.title && c.page).map((c) => ({ title: c.title, page: c.page, level: 0 })));
+    } else if (numPages) {
+      autoDetectedRef.current = true;
+      autoDetectChapters();
+    }
+  }, [noEmbedded, access, outline.length, numPages, autoDetectChapters]);
 
   /* ---- in-book search ---- */
   const buildIndex = useCallback(async () => {
