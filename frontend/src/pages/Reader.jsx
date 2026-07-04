@@ -89,6 +89,8 @@ const Reader = () => {
   const pdfDocRef = useRef(null);
   const pageTextsRef = useRef(null);
   const autoDetectedRef = useRef(false);
+  const scrollAfterRef = useRef(null); // 'top' | 'bottom' — where to scroll after a wheel page-flip
+  const coolingRef = useRef(false); // cooldown between wheel page-flips (survives re-renders)
 
   const themeCfg = THEMES[theme];
   const isDouble = mode === 'double';
@@ -232,6 +234,37 @@ const Reader = () => {
   }, [clampPage, stepN, isPreview, pageNumber, numPages]);
   const prev = useCallback(() => setPageNumber((p) => clampPage(p - stepN)), [clampPage, stepN]);
   const jumpTo = (p) => { if (isScroll) setMode('single'); goTo(p); };
+
+  // Scroll-to-turn: in single / two-page mode, scrolling past the bottom of the
+  // current page advances to the next page (and past the top goes back), so
+  // long pages read continuously. `scrollAfterRef` tells the newly rendered
+  // page where to land (top when going forward, bottom when going back).
+  useEffect(() => {
+    const el = areaRef.current;
+    if (!el || isScroll) return;
+    const onWheel = (e) => {
+      const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 2;
+      const atTop = el.scrollTop <= 2;
+      if (e.deltaY > 0 && atBottom && pageNumber < numPages) {
+        e.preventDefault();
+        if (coolingRef.current) return;
+        coolingRef.current = true;
+        scrollAfterRef.current = 'top';
+        next();
+        setTimeout(() => { coolingRef.current = false; }, 380);
+      } else if (e.deltaY < 0 && atTop && pageNumber > 1) {
+        e.preventDefault();
+        if (coolingRef.current) return;
+        coolingRef.current = true;
+        scrollAfterRef.current = 'bottom';
+        prev();
+        setTimeout(() => { coolingRef.current = false; }, 380);
+      }
+      // otherwise let the page scroll normally within the viewport
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [isScroll, pageNumber, numPages, next, prev]);
 
   const currentChapter = useMemo(() => {
     let cur = null;
@@ -524,7 +557,20 @@ const Reader = () => {
   const renderPage = (n, key) => (
     <div key={key} data-reader-page={n} className="relative rounded-sm overflow-hidden shadow-[0_20px_60px_-20px_rgba(0,0,0,0.75)] bg-white">
       <div style={{ filter: themeCfg.pageFilter }}>
-        <Page pageNumber={n} width={pageWidth} renderTextLayer renderAnnotationLayer={false} loading="" customTextRenderer={searchTerm ? textRenderer : undefined} />
+        <Page
+          pageNumber={n}
+          width={pageWidth}
+          renderTextLayer
+          renderAnnotationLayer={false}
+          loading=""
+          customTextRenderer={searchTerm ? textRenderer : undefined}
+          onRenderSuccess={() => {
+            if (scrollAfterRef.current && areaRef.current) {
+              areaRef.current.scrollTop = scrollAfterRef.current === 'bottom' ? areaRef.current.scrollHeight : 0;
+              scrollAfterRef.current = null;
+            }
+          }}
+        />
       </div>
       <HighlightLayer items={highlights.filter((h) => h.page === n)} />
       <div className="absolute inset-0 pointer-events-none z-[6]" style={{ backgroundImage: wmBg, backgroundRepeat: 'repeat' }} />
