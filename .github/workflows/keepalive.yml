@@ -1,0 +1,21 @@
+name: Keep backend awake
+
+# Render's free tier sleeps after ~15 min idle, causing a ~50s cold start on the
+# next visit. This pings the backend health endpoint every ~10 minutes so it
+# stays warm. One always-on free instance fits within Render's 750 free hours/mo.
+on:
+  schedule:
+    - cron: '*/10 * * * *' # every 10 minutes (GitHub may delay under load)
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping backend
+        run: |
+          echo "Pinging backend…"
+          # --max-time 70 allows for a cold start; don't fail the job on a miss.
+          curl -fsS --max-time 70 https://hindu-marketplace.onrender.com/ \
+            && echo "Backend is awake." \
+            || echo "Ping did not succeed this run; next run will retry."
