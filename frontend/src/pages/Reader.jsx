@@ -91,6 +91,7 @@ const Reader = () => {
   const autoDetectedRef = useRef(false);
   const scrollAfterRef = useRef(null); // 'top' | 'bottom' — where to scroll after a wheel page-flip
   const coolingRef = useRef(false); // cooldown between wheel page-flips (survives re-renders)
+  const touchRef = useRef(null); // swipe tracking on touch devices
 
   const themeCfg = THEMES[theme];
   const isDouble = mode === 'double';
@@ -460,6 +461,26 @@ const Reader = () => {
     setToolbar({ page, rects, text: sel.toString().trim(), top: first.top, left: first.left + first.width / 2 });
   }, [canHighlight]);
 
+  // Touch: swipe left/right to turn pages (mobile & tablet). A mostly-horizontal
+  // flick turns the page; anything else falls through to normal scroll/selection.
+  const onTouchStart = (e) => {
+    if (e.touches.length === 1) touchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
+  };
+  const onTouchEndReader = (e) => {
+    const s = touchRef.current;
+    touchRef.current = null;
+    onSelectText(); // handle text selection first
+    if (!s || isScroll) return;
+    if (!window.getSelection()?.isCollapsed) return; // user was selecting text
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - s.x;
+    const dy = touch.clientY - s.y;
+    if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.6 && Date.now() - s.t < 700) {
+      if (dx < 0) next();
+      else prev();
+    }
+  };
+
   const createHighlight = async (color) => {
     if (!toolbar) return null;
     const { page, rects, text } = toolbar;
@@ -650,7 +671,9 @@ const Reader = () => {
           </IconBtn>
           {canBookmark && <IconBtn name="bookmark" title="Bookmark (B)" active={isBookmarked} onClick={toggleBookmark} />}
           {showAnnotations && <IconBtn name="note" title="Annotations (N)" active={panelOpen} onClick={() => setPanelOpen((o) => !o)} />}
-          <IconBtn name="expand" title="Full screen (F)" active={fullscreen} onClick={toggleFullscreen} />
+          <span className="hidden sm:block">
+            <IconBtn name="expand" title="Full screen (F)" active={fullscreen} onClick={toggleFullscreen} />
+          </span>
           <div className="relative">
             <IconBtn name="more" title="More" active={moreOpen} onClick={() => { setMoreOpen((o) => !o); setApOpen(false); }} />
             {moreOpen && <MoreMenu onDownload={download} canDownload={canDownload} onClose={() => setMoreOpen(false)} />}
@@ -675,7 +698,8 @@ const Reader = () => {
           className="flex-1 overflow-auto min-w-0"
           style={{ background: `radial-gradient(circle at 50% 0%, #1a222a 0%, ${themeCfg.area} 70%)` }}
           onMouseUp={onSelectText}
-          onTouchEnd={onSelectText}
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEndReader}
           onCopy={(e) => { if (!perms.copy) e.preventDefault(); }}
           onScroll={() => toolbar && setToolbar(null)}
         >
