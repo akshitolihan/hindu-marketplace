@@ -16,6 +16,7 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Account from './pages/Account';
 import Admin from './pages/Admin';
+import Reawaken from './pages/Reawaken';
 import NotFound from './pages/NotFound';
 
 // The reader pulls in react-pdf (~heavy); load it only when a book is opened.
@@ -30,6 +31,7 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/books" element={<Books />} />
             <Route path="/books/:id" element={<BookDetail />} />
+            <Route path="/reawaken" element={<Reawaken />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/verify-email" element={<VerifyEmail />} />

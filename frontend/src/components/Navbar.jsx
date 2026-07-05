@@ -24,6 +24,7 @@ const Navbar = () => {
   const links = (
     <>
       <Link to="/books" className={navLink}>Library</Link>
+      <Link to="/reawaken" className="text-sm font-semibold text-gold hover:text-gold-light transition-colors">Reawaken</Link>
       {user ? (
         <>
           <Link to="/my-library" className={navLink}>My Books</Link>
