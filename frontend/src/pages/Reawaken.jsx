@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import api from '../api/client';
+import { useAuth } from '../context/AuthContext';
 
 /* =========================================================================
    "Reawaken" — a guided, AI-led program to help people rebuild their life.
@@ -112,6 +114,20 @@ const STORE = 'reawaken_v1';
 const load = () => { try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch { return {}; } };
 const save = (d) => localStorage.setItem(STORE, JSON.stringify(d));
 
+// Turn an admin-entered URL (YouTube / Vimeo / direct file) into something we
+// can embed. iframes for the streaming services, a <video> for direct files.
+const videoEmbed = (url) => {
+  if (!url) return null;
+  const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
+  if (yt) return { type: 'iframe', src: `https://www.youtube.com/embed/${yt[1]}` };
+  const vm = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+  if (vm) return { type: 'iframe', src: `https://player.vimeo.com/video/${vm[1]}` };
+  if (/\.(mp4|webm|ogg|mov)(\?|$)/i.test(url) || /res\.cloudinary\.com\/.*\/video\//.test(url)) {
+    return { type: 'video', src: url };
+  }
+  return { type: 'iframe', src: url };
+};
+
 /* --------- Life Wheel (radar chart) --------- */
 const LifeWheel = ({ scores }) => {
   const size = 320, cx = size / 2, cy = size / 2, R = 120;
@@ -136,17 +152,35 @@ const LifeWheel = ({ scores }) => {
   );
 };
 
-/* --------- Lesson modal (video placeholder) --------- */
-const LessonModal = ({ stage, lesson, done, onToggle, onClose }) => (
+/* --------- Lesson modal (plays the video when one is set) --------- */
+const LessonModal = ({ stage, lesson, videoUrl, done, onToggle, onClose }) => {
+  const embed = videoEmbed(videoUrl);
+  return (
   <div className="fixed inset-0 z-50 bg-black/60 grid place-items-center p-4" onClick={onClose}>
     <div className="card max-w-2xl w-full overflow-hidden" onClick={(e) => e.stopPropagation()}>
-      <div className="aspect-video bg-gradient-to-br from-maroon-dark to-maroon grid place-items-center relative">
-        <div className="mandala absolute inset-0 opacity-[0.08]" />
-        <div className="relative text-center text-cream">
-          <div className="h-16 w-16 mx-auto mb-3 rounded-full bg-gold/90 text-maroon-dark grid place-items-center text-2xl">▶</div>
-          <p className="text-sm text-cream/70">Video lesson · {lesson.dur}</p>
-          <p className="text-xs text-cream/50 mt-1">(AI-generated video — to be added by admin)</p>
-        </div>
+      <div className="aspect-video bg-black relative">
+        {embed ? (
+          embed.type === 'video' ? (
+            <video src={embed.src} controls autoPlay className="w-full h-full" />
+          ) : (
+            <iframe
+              src={embed.src}
+              title={lesson.title}
+              className="w-full h-full"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          )
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-maroon-dark to-maroon grid place-items-center">
+            <div className="mandala absolute inset-0 opacity-[0.08]" />
+            <div className="relative text-center text-cream">
+              <div className="h-16 w-16 mx-auto mb-3 rounded-full bg-gold/90 text-maroon-dark grid place-items-center text-2xl">▶</div>
+              <p className="text-sm text-cream/70">Video lesson · {lesson.dur}</p>
+              <p className="text-xs text-cream/50 mt-1">Coming soon — this lesson's video is being prepared.</p>
+            </div>
+          </div>
+        )}
       </div>
       <div className="p-6">
         <span className="eyebrow">{stage.title}</span>
@@ -163,17 +197,59 @@ const LessonModal = ({ stage, lesson, done, onToggle, onClose }) => (
       </div>
     </div>
   </div>
-);
+  );
+};
 
 /* ============================ Page ============================ */
 const Reawaken = () => {
+  const { user } = useAuth();
   const [data, setData] = useState(load());
+  const [videos, setVideos] = useState({});
   const [view, setView] = useState(data.scores ? 'plan' : 'intro'); // intro | assess | plan
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState(data.answers || {});
   const [activeLesson, setActiveLesson] = useState(null);
 
   useEffect(() => save(data), [data]);
+
+  // Best-effort push of a logged-in user's plan to the server (survives across
+  // devices). Falls back silently to localStorage-only when logged out/offline.
+  const pushServer = (d) => {
+    if (!user) return;
+    api.put('/reawaken/progress', {
+      scores: d.scores || null,
+      answers: d.answers || null,
+      completedLessons: d.done || []
+    }).catch(() => {});
+  };
+
+  // Load the admin-set lesson videos (public — no auth needed).
+  useEffect(() => {
+    let alive = true;
+    api.get('/reawaken/course').then((r) => { if (alive) setVideos(r.data.videos || {}); }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  // For a logged-in user, adopt any plan saved server-side; if they have a local
+  // plan but nothing is saved yet, push the local one up.
+  useEffect(() => {
+    if (!user) return;
+    let alive = true;
+    api.get('/reawaken/progress').then((r) => {
+      if (!alive) return;
+      const s = r.data || {};
+      if (s.scores) {
+        const merged = { scores: s.scores, answers: s.answers || {}, done: s.completedLessons || [] };
+        setData(merged);
+        setAnswers(s.answers || {});
+        setView('plan');
+      } else if (data.scores) {
+        pushServer(data);
+      }
+    }).catch(() => {});
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   const doneSet = useMemo(() => new Set(data.done || []), [data.done]);
   const overall = data.scores ? Math.round((Object.values(data.scores).reduce((a, b) => a + b, 0) / (DIMENSIONS.length * 5)) * 100) : 0;
@@ -198,15 +274,17 @@ const Reawaken = () => {
   const submitAssessment = () => {
     const scores = {};
     DIMENSIONS.forEach((d) => { scores[d.key] = answers[d.key] || 3; });
-    setData((prev) => ({ ...prev, scores, answers }));
+    const next = { ...data, scores, answers };
+    setData(next);
+    pushServer(next);
     setView('plan');
   };
   const toggleLesson = (id) => {
-    setData((prev) => {
-      const done = new Set(prev.done || []);
-      done.has(id) ? done.delete(id) : done.add(id);
-      return { ...prev, done: [...done] };
-    });
+    const done = new Set(data.done || []);
+    done.has(id) ? done.delete(id) : done.add(id);
+    const next = { ...data, done: [...done] };
+    setData(next);
+    pushServer(next);
   };
   const retake = () => { setAnswers({}); setStep(0); setView('assess'); };
 
@@ -352,7 +430,8 @@ const Reawaken = () => {
       )}
 
       {activeLesson && (
-        <LessonModal stage={activeLesson.stage} lesson={activeLesson.lesson} done={doneSet.has(activeLesson.lesson.id)}
+        <LessonModal stage={activeLesson.stage} lesson={activeLesson.lesson} videoUrl={videos[activeLesson.lesson.id]}
+          done={doneSet.has(activeLesson.lesson.id)}
           onToggle={toggleLesson} onClose={() => setActiveLesson(null)} />
       )}
 

@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { formatINR, isOnSale } from '../utils/format';
 
 const CATEGORIES = ['Vedas', 'Upanishads', 'Gita', 'OSHO', 'Puranas', 'Others'];
-const TABS = ['Dashboard', 'Upload Book', 'Manage Books', 'Orders', 'Users'];
+const TABS = ['Dashboard', 'Upload Book', 'Manage Books', 'Reawaken', 'Orders', 'Users'];
 
 const Admin = () => {
   const { user, logout } = useAuth();
@@ -43,6 +43,7 @@ const Admin = () => {
         {tab === 'Dashboard' && <Dashboard />}
         {tab === 'Upload Book' && <UploadBook onDone={() => setTab('Manage Books')} />}
         {tab === 'Manage Books' && <ManageBooks />}
+        {tab === 'Reawaken' && <ReawakenAdmin />}
         {tab === 'Orders' && <Orders />}
         {tab === 'Users' && <Users />}
       </main>
@@ -619,6 +620,102 @@ const Users = () => {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+};
+
+/* ---------------- Reawaken: manage lesson videos ---------------- */
+const ReawakenAdmin = () => {
+  const [stages, setStages] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [drafts, setDrafts] = useState({}); // lessonId -> edited URL
+  const [savingId, setSavingId] = useState(null);
+  const [savedId, setSavedId] = useState(null);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    api.get('/reawaken/admin/lessons')
+      .then((r) => {
+        setStages(r.data.stages || []);
+        const d = {};
+        (r.data.stages || []).forEach((s) => s.lessons.forEach((l) => { d[l.id] = l.videoUrl || ''; }));
+        setDrafts(d);
+      })
+      .catch(() => setErr('Could not load the Reawaken course.'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const save = async (lessonId) => {
+    setErr('');
+    setSavingId(lessonId);
+    try {
+      const { data } = await api.put(`/reawaken/admin/lessons/${lessonId}`, { videoUrl: drafts[lessonId] || '' });
+      setStages((prev) => prev.map((s) => ({
+        ...s,
+        lessons: s.lessons.map((l) => (l.id === lessonId ? { ...l, videoUrl: data.videoUrl } : l))
+      })));
+      setSavedId(lessonId);
+      setTimeout(() => setSavedId((c) => (c === lessonId ? null : c)), 2000);
+    } catch (e) {
+      setErr(e.response?.data?.message || 'Could not save that link.');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const total = stages.reduce((n, s) => n + s.lessons.length, 0);
+  const withVideo = stages.reduce((n, s) => n + s.lessons.filter((l) => l.videoUrl).length, 0);
+
+  if (loading) return <p className="text-gray-500">Loading course…</p>;
+
+  return (
+    <div>
+      <div className="mb-5">
+        <h2 className="font-display text-2xl font-semibold text-maroon">Reawaken — course videos</h2>
+        <p className="text-sm text-ink-soft mt-1">
+          Paste a YouTube, Vimeo, or direct video link (.mp4) for each lesson. It plays inside the
+          lesson on the <Link to="/reawaken" className="text-saffron underline">Reawaken</Link> page.
+          Leave blank to show a “coming soon” placeholder. <span className="text-maroon font-medium">{withVideo}/{total}</span> lessons have a video.
+        </p>
+      </div>
+      {err && <p className="mb-4 p-3 rounded-lg bg-red-100 text-red-700 text-sm">{err}</p>}
+
+      <div className="space-y-6">
+        {stages.map((s, i) => (
+          <div key={s.key} className="card p-5">
+            <h3 className="font-display text-lg font-semibold text-maroon mb-3">
+              <span className="text-gold mr-2">{i + 1}.</span>{s.title}
+            </h3>
+            <div className="space-y-3">
+              {s.lessons.map((l) => (
+                <div key={l.id} className="flex flex-col sm:flex-row sm:items-center gap-2">
+                  <div className="sm:w-64 flex-shrink-0">
+                    <p className="text-sm font-medium text-maroon flex items-center gap-2">
+                      <span className={`h-2 w-2 rounded-full ${l.videoUrl ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+                      {l.title}
+                    </p>
+                    <p className="text-xs text-ink-soft ml-4">{l.dur}</p>
+                  </div>
+                  <input
+                    type="url"
+                    value={drafts[l.id] ?? ''}
+                    onChange={(e) => setDrafts((d) => ({ ...d, [l.id]: e.target.value }))}
+                    placeholder="https://youtube.com/watch?v=…"
+                    className="flex-1 border border-gold/30 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold"
+                  />
+                  <button
+                    onClick={() => save(l.id)}
+                    disabled={savingId === l.id || (drafts[l.id] ?? '') === (l.videoUrl || '')}
+                    className="btn btn-primary btn-sm disabled:opacity-40"
+                  >
+                    {savingId === l.id ? 'Saving…' : savedId === l.id ? '✓ Saved' : 'Save'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
