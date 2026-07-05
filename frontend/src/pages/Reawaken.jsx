@@ -128,6 +128,14 @@ const videoEmbed = (url) => {
   return { type: 'iframe', src: url };
 };
 
+// A playlist-style thumbnail. YouTube exposes one by video id; others fall back
+// to a gradient tile (returns null).
+const videoThumb = (url) => {
+  if (!url) return null;
+  const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
+  return yt ? `https://img.youtube.com/vi/${yt[1]}/mqdefault.jpg` : null;
+};
+
 /* --------- Life Wheel (radar chart) --------- */
 const LifeWheel = ({ scores }) => {
   const size = 320, cx = size / 2, cy = size / 2, R = 120;
@@ -152,51 +160,129 @@ const LifeWheel = ({ scores }) => {
   );
 };
 
-/* --------- Lesson modal (plays the video when one is set) --------- */
-const LessonModal = ({ stage, lesson, videoUrl, done, onToggle, onClose }) => {
+/* --------- The video player area (shared by the watch view) --------- */
+const Player = ({ lesson, videoUrl, onEnded }) => {
   const embed = videoEmbed(videoUrl);
-  return (
-  <div className="fixed inset-0 z-50 bg-black/60 grid place-items-center p-4" onClick={onClose}>
-    <div className="card max-w-2xl w-full overflow-hidden" onClick={(e) => e.stopPropagation()}>
-      <div className="aspect-video bg-black relative">
-        {embed ? (
-          embed.type === 'video' ? (
-            <video src={embed.src} controls autoPlay className="w-full h-full" />
-          ) : (
-            <iframe
-              src={embed.src}
-              title={lesson.title}
-              className="w-full h-full"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
-          )
-        ) : (
-          <div className="w-full h-full bg-gradient-to-br from-maroon-dark to-maroon grid place-items-center">
-            <div className="mandala absolute inset-0 opacity-[0.08]" />
-            <div className="relative text-center text-cream">
-              <div className="h-16 w-16 mx-auto mb-3 rounded-full bg-gold/90 text-maroon-dark grid place-items-center text-2xl">▶</div>
-              <p className="text-sm text-cream/70">Video lesson · {lesson.dur}</p>
-              <p className="text-xs text-cream/50 mt-1">Coming soon — this lesson's video is being prepared.</p>
-            </div>
-          </div>
-        )}
-      </div>
-      <div className="p-6">
-        <span className="eyebrow">{stage.title}</span>
-        <h3 className="font-display text-2xl font-semibold text-maroon mt-1">{lesson.title}</h3>
-        <p className="text-ink-soft mt-2">{lesson.blurb}</p>
-        <div className="divider-gold my-4" />
-        <p className="text-sm text-ink"><span className="font-semibold text-maroon">This stage's practice:</span> {stage.practice}</p>
-        <div className="flex gap-3 mt-5">
-          <button onClick={() => onToggle(lesson.id)} className={done ? 'btn btn-outline' : 'btn btn-gold'}>
-            {done ? '✓ Completed — undo' : 'Mark as complete'}
-          </button>
-          <button onClick={onClose} className="btn btn-outline">Close</button>
+  if (!embed) {
+    return (
+      <div className="w-full h-full bg-gradient-to-br from-maroon-dark to-maroon grid place-items-center relative">
+        <div className="mandala absolute inset-0 opacity-[0.08]" />
+        <div className="relative text-center text-cream">
+          <div className="h-16 w-16 mx-auto mb-3 rounded-full bg-gold/90 text-maroon-dark grid place-items-center text-2xl">▶</div>
+          <p className="text-sm text-cream/70">Video lesson · {lesson.dur}</p>
+          <p className="text-xs text-cream/50 mt-1">Coming soon — this lesson's video is being prepared.</p>
         </div>
       </div>
-    </div>
-  </div>
+    );
+  }
+  return embed.type === 'video' ? (
+    <video key={lesson.id} src={embed.src} controls autoPlay className="w-full h-full" onEnded={onEnded} />
+  ) : (
+    <iframe
+      key={lesson.id}
+      src={embed.src}
+      title={lesson.title}
+      className="w-full h-full"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      allowFullScreen
+    />
+  );
+};
+
+/* --------- YouTube-style watch view: one player + a playlist sidebar --------- */
+const Watch = ({ playlist, activeId, videos, doneSet, progress, onSelect, onToggle, onBack }) => {
+  const idx = Math.max(0, playlist.findIndex((p) => p.lesson.id === activeId));
+  const current = playlist[idx];
+  if (!current) return null;
+  const prev = playlist[idx - 1];
+  const next = playlist[idx + 1];
+  const { stage, lesson } = current;
+  const done = doneSet.has(lesson.id);
+
+  return (
+    <main className="flex-1 bg-cream pt-24 pb-16">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <button onClick={onBack} className="text-sm text-maroon hover:text-saffron font-medium mb-4 inline-flex items-center gap-1">
+          ← Back to roadmap
+        </button>
+
+        <div className="grid lg:grid-cols-[1fr_380px] gap-6">
+          {/* ---- Player + details ---- */}
+          <div>
+            <div className="aspect-video bg-black rounded-2xl overflow-hidden relative shadow-[var(--shadow-soft)]">
+              <Player lesson={lesson} videoUrl={videos[lesson.id]} onEnded={() => next && onSelect(next.lesson.id)} />
+            </div>
+
+            <div className="mt-4">
+              <p className="eyebrow">{stage.title} · <span className="text-gold italic">{stage.sanskrit}</span></p>
+              <h1 className="font-display text-2xl md:text-3xl font-semibold text-maroon mt-1">{lesson.title}</h1>
+              <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-ink-soft">
+                <span>Lesson {idx + 1} of {playlist.length}</span>
+                <span>·</span>
+                <span>{lesson.dur}</span>
+                {done && <span className="pill bg-emerald-100 text-emerald-700 text-[0.65rem]">✓ Completed</span>}
+              </div>
+
+              <div className="flex flex-wrap gap-3 mt-4">
+                <button onClick={() => onToggle(lesson.id)} className={done ? 'btn btn-outline btn-sm' : 'btn btn-gold btn-sm'}>
+                  {done ? 'Mark as not done' : '✓ Mark as complete'}
+                </button>
+                <button disabled={!prev} onClick={() => prev && onSelect(prev.lesson.id)} className="btn btn-outline btn-sm disabled:opacity-40">← Previous</button>
+                <button disabled={!next} onClick={() => next && onSelect(next.lesson.id)} className="btn btn-primary btn-sm disabled:opacity-40">Next →</button>
+              </div>
+
+              <div className="card p-4 mt-5">
+                <p className="text-ink-soft">{lesson.blurb}</p>
+                <div className="divider-gold my-3" />
+                <p className="text-sm text-ink"><span className="font-semibold text-maroon">This stage's practice:</span> {stage.practice}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* ---- Playlist sidebar ---- */}
+          <aside className="lg:sticky lg:top-24 self-start">
+            <div className="card overflow-hidden">
+              <div className="p-4 border-b border-gold/10 bg-sand/60">
+                <p className="font-display text-lg font-semibold text-maroon">The 8 Stages Back to Life</p>
+                <p className="text-xs text-ink-soft mt-0.5">{doneSet.size} of {playlist.length} lessons complete · {progress}%</p>
+                <div className="h-1.5 rounded-full bg-black/10 mt-2 overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-saffron to-gold" style={{ width: `${progress}%` }} />
+                </div>
+              </div>
+              <div className="max-h-[72vh] overflow-y-auto">
+                {playlist.map((p, i) => {
+                  const active = p.lesson.id === activeId;
+                  const ldone = doneSet.has(p.lesson.id);
+                  const thumb = videoThumb(videos[p.lesson.id]);
+                  const showStage = i === 0 || playlist[i - 1].stage.key !== p.stage.key;
+                  return (
+                    <React.Fragment key={p.lesson.id}>
+                      {showStage && (
+                        <p className="px-4 pt-3 pb-1 text-[0.65rem] uppercase tracking-widest text-gold font-semibold">{p.stage.title}</p>
+                      )}
+                      <button
+                        onClick={() => onSelect(p.lesson.id)}
+                        className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${active ? 'bg-gold/15' : 'hover:bg-sand/70'}`}
+                      >
+                        <span className="text-xs text-ink-soft/60 w-4 text-right flex-shrink-0">{active ? '▶' : i + 1}</span>
+                        <div className="relative h-12 w-20 rounded-md overflow-hidden flex-shrink-0 bg-gradient-to-br from-maroon to-maroon-dark grid place-items-center">
+                          {thumb ? <img src={thumb} alt="" className="h-full w-full object-cover" /> : <span className="text-gold text-sm">▶</span>}
+                          {ldone && <span className="absolute inset-0 bg-black/50 grid place-items-center text-emerald-300 text-lg">✓</span>}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-medium leading-snug line-clamp-2 ${active ? 'text-maroon' : 'text-ink'}`}>{p.lesson.title}</p>
+                          <p className="text-xs text-ink-soft/70 mt-0.5">{p.lesson.dur}{videos[p.lesson.id] ? '' : ' · coming soon'}</p>
+                        </div>
+                      </button>
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </main>
   );
 };
 
@@ -205,10 +291,10 @@ const Reawaken = () => {
   const { user } = useAuth();
   const [data, setData] = useState(load());
   const [videos, setVideos] = useState({});
-  const [view, setView] = useState(data.scores ? 'plan' : 'intro'); // intro | assess | plan
+  const [view, setView] = useState(data.scores ? 'plan' : 'intro'); // intro | assess | plan | watch
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState(data.answers || {});
-  const [activeLesson, setActiveLesson] = useState(null);
+  const [watchId, setWatchId] = useState(null);
 
   useEffect(() => save(data), [data]);
 
@@ -287,6 +373,14 @@ const Reawaken = () => {
     pushServer(next);
   };
   const retake = () => { setAnswers({}); setStep(0); setView('assess'); };
+
+  // Flat playlist (in roadmap order) that the watch view pages through.
+  const playlist = useMemo(() => roadmap.flatMap((s) => s.lessons.map((l) => ({ stage: s, lesson: l }))), [roadmap]);
+  const openWatch = (id) => {
+    setWatchId(id || playlist[0]?.lesson.id);
+    setView('watch');
+    window.scrollTo(0, 0);
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -404,7 +498,7 @@ const Reawaken = () => {
                     {focus.map((f) => <span key={f.key} className="pill bg-gold/20 text-gold-light border border-gold/30">{f.label}</span>)}
                   </div>
                   <div className="flex gap-3">
-                    <a href="#roadmap" className="btn btn-gold">Begin the journey</a>
+                    <button onClick={() => openWatch(playlist[0]?.lesson.id)} className="btn btn-gold">▶ Begin the journey</button>
                     <button onClick={retake} className="btn btn-outline-light">Retake compass</button>
                   </div>
                 </div>
@@ -424,15 +518,23 @@ const Reawaken = () => {
             </div>
           )}
 
-          <Curriculum roadmap={roadmap} doneSet={doneSet} focus={focus} onLesson={(stage, lesson) => setActiveLesson({ stage, lesson })} />
+          <Curriculum roadmap={roadmap} doneSet={doneSet} focus={focus} onLesson={(stage, lesson) => openWatch(lesson.id)} />
           <SafetyNote />
         </main>
       )}
 
-      {activeLesson && (
-        <LessonModal stage={activeLesson.stage} lesson={activeLesson.lesson} videoUrl={videos[activeLesson.lesson.id]}
-          done={doneSet.has(activeLesson.lesson.id)}
-          onToggle={toggleLesson} onClose={() => setActiveLesson(null)} />
+      {/* ===== WATCH (playlist player) ===== */}
+      {view === 'watch' && (
+        <Watch
+          playlist={playlist}
+          activeId={watchId}
+          videos={videos}
+          doneSet={doneSet}
+          progress={progress}
+          onSelect={(id) => { setWatchId(id); window.scrollTo(0, 0); }}
+          onToggle={toggleLesson}
+          onBack={() => setView('plan')}
+        />
       )}
 
       <Footer />
