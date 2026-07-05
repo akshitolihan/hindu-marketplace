@@ -47,12 +47,25 @@ router.get('/progress', auth, async (req, res) => {
   }
 });
 
+// Coerce an assessment map into a small, well-formed object: at most 20 keys,
+// each a short string key mapped to a number 1-5. Guards the Mixed field from
+// being used to store arbitrary/oversized JSON.
+function cleanScoreMap(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  const out = {};
+  for (const k of Object.keys(v).slice(0, 20)) {
+    const n = Number(v[k]);
+    if (Number.isFinite(n)) out[String(k).slice(0, 40)] = Math.min(5, Math.max(1, Math.round(n)));
+  }
+  return out;
+}
+
 // Upsert. Body: { scores?, answers?, completedLessons? } — any subset.
 router.put('/progress', auth, async (req, res) => {
   try {
     const update = {};
-    if (req.body.scores !== undefined) update.scores = req.body.scores;
-    if (req.body.answers !== undefined) update.answers = req.body.answers;
+    if (req.body.scores !== undefined) update.scores = cleanScoreMap(req.body.scores);
+    if (req.body.answers !== undefined) update.answers = cleanScoreMap(req.body.answers);
     if (Array.isArray(req.body.completedLessons)) {
       update.completedLessons = req.body.completedLessons
         .filter((id) => LESSON_IDS.has(id))

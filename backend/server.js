@@ -75,7 +75,12 @@ app.use((err, req, res, next) => {
   if (err.code === 'LIMIT_FILE_SIZE') {
     return res.status(413).json({ message: 'File too large.' });
   }
-  res.status(err.status || 500).json({ message: err.message || 'Server error' });
+  // Surface known client errors (validation/upload set err.status < 500), but
+  // never leak internal error text for unexpected failures.
+  if (err.status && err.status >= 400 && err.status < 500) {
+    return res.status(err.status).json({ message: err.message });
+  }
+  res.status(500).json({ message: 'Server error' });
 });
 
 const connectDB = async () => {

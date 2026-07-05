@@ -10,13 +10,19 @@ const upload = multer({
   storage,
   limits: { fileSize: MAX_PDF_BYTES },
   fileFilter: (req, file, cb) => {
+    // Reject with a client-safe 400 (see the error handler in server.js).
+    const reject = (msg) => {
+      const e = new Error(msg);
+      e.status = 400;
+      return cb(e);
+    };
     if (file.fieldname === 'pdf') {
       if (file.mimetype !== 'application/pdf') {
-        return cb(new Error('The book file must be a PDF.'));
+        return reject('The book file must be a PDF.');
       }
     } else if (file.fieldname === 'cover') {
       if (!/^image\/(png|jpe?g|webp)$/.test(file.mimetype)) {
-        return cb(new Error('Cover must be a PNG, JPG or WEBP image.'));
+        return reject('Cover must be a PNG, JPG or WEBP image.');
       }
     }
     cb(null, true);

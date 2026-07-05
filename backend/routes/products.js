@@ -19,7 +19,10 @@ router.get('/', async (req, res) => {
       query.category = category;
     }
     if (search) {
-      query.title = { $regex: search.slice(0, 80), $options: 'i' };
+      // Escape regex metacharacters so user input is matched literally — this
+      // prevents ReDoS / unexpected matches from a crafted ?search= value.
+      const safe = String(search).slice(0, 80).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      query.title = { $regex: safe, $options: 'i' };
     }
 
     const products = await Product.find(query).sort({ createdAt: -1 }).limit(100);

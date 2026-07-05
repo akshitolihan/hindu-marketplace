@@ -25,6 +25,10 @@ const generateToken = (user) =>
 
 const hashToken = (raw) => crypto.createHash('sha256').update(raw).digest('hex');
 
+// A throwaway hash to compare against when an email isn't found, so login
+// response time doesn't reveal whether an account exists (user enumeration).
+const DUMMY_HASH = bcrypt.hashSync('unused-placeholder-for-timing', 12);
+
 async function sendVerificationEmail(user) {
   const rawToken = crypto.randomBytes(32).toString('hex');
   user.verificationToken = hashToken(rawToken);
@@ -112,13 +116,10 @@ router.post(
       const { email, password } = req.body;
 
       const user = await User.findOne({ email });
-      // Generic message + always compare to blunt user-enumeration / timing.
-      if (!user || !user.password) {
-        return res.status(400).json({ message: 'Invalid credentials' });
-      }
-
-      const isMatch = await bcrypt.compare(password, user.password);
-      if (!isMatch) {
+      // Generic message + always run a bcrypt compare (against a dummy hash when
+      // the user is missing) so timing doesn't reveal whether the email exists.
+      const isMatch = await bcrypt.compare(password, user?.password || DUMMY_HASH);
+      if (!user || !user.password || !isMatch) {
         return res.status(400).json({ message: 'Invalid credentials' });
       }
 
