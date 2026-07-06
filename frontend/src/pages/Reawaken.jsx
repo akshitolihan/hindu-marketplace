@@ -27,7 +27,7 @@ const DIMENSIONS = [
 // are surfaced first in the personalized roadmap.
 const STAGES = [
   {
-    n: 1, key: 'awaken', dim: null, title: 'Awaken', sanskrit: 'Jāgṛti',
+    n: 1, key: 'awaken', dim: null, title: 'Awaken', sanskrit: 'Jāgṛti', glyph: '☀',
     tagline: 'Face where you are — with honesty and hope.',
     practice: 'A 5-minute "honest inventory" — name where you are without judgment.',
     lessons: [
@@ -37,7 +37,7 @@ const STAGES = [
     ]
   },
   {
-    n: 2, key: 'reset', dim: 'structure', title: 'Reset the Days', sanskrit: 'Dinacharyā',
+    n: 2, key: 'reset', dim: 'structure', title: 'Reset the Days', sanskrit: 'Dinacharyā', glyph: '☼',
     tagline: 'Rebuild the scaffolding of a life: sleep, mornings, small wins.',
     practice: 'Design a 3-step morning ritual and a fixed sleep time.',
     lessons: [
@@ -48,7 +48,7 @@ const STAGES = [
     ]
   },
   {
-    n: 3, key: 'restore', dim: 'vitality', title: 'Restore the Body', sanskrit: 'Prāṇa',
+    n: 3, key: 'restore', dim: 'vitality', title: 'Restore the Body', sanskrit: 'Prāṇa', glyph: '❋',
     tagline: 'Bring energy back through movement, food, and breath.',
     practice: 'A daily 10-minute walk + one nourishing meal.',
     lessons: [
@@ -58,7 +58,7 @@ const STAGES = [
     ]
   },
   {
-    n: 4, key: 'still', dim: 'mind', title: 'Still the Mind', sanskrit: 'Dhyāna',
+    n: 4, key: 'still', dim: 'mind', title: 'Still the Mind', sanskrit: 'Dhyāna', glyph: '☾',
     tagline: 'Quiet anxiety, loosen the grip of thoughts, find stillness.',
     practice: '10 minutes of guided meditation, daily.',
     lessons: [
@@ -68,7 +68,7 @@ const STAGES = [
     ]
   },
   {
-    n: 5, key: 'release', dim: 'worth', title: 'Release the Past', sanskrit: 'Kṣamā',
+    n: 5, key: 'release', dim: 'worth', title: 'Release the Past', sanskrit: 'Kṣamā', glyph: '❁',
     tagline: 'Heal old wounds, rebuild self-worth, let go.',
     practice: 'Write a letter you never send. Then a list of what you forgive.',
     lessons: [
@@ -78,7 +78,7 @@ const STAGES = [
     ]
   },
   {
-    n: 6, key: 'reconnect', dim: 'connection', title: 'Reconnect', sanskrit: 'Saṅga',
+    n: 6, key: 'reconnect', dim: 'connection', title: 'Reconnect', sanskrit: 'Saṅga', glyph: '✦',
     tagline: 'Rebuild the bonds that hold a life together.',
     practice: 'Reach out to one person this week — a message, a call.',
     lessons: [
@@ -88,7 +88,7 @@ const STAGES = [
     ]
   },
   {
-    n: 7, key: 'purpose', dim: 'purpose', title: 'Rediscover Purpose', sanskrit: 'Dharma',
+    n: 7, key: 'purpose', dim: 'purpose', title: 'Rediscover Purpose', sanskrit: 'Dharma', glyph: '✧',
     tagline: 'Find meaning, values, and something to move toward.',
     practice: 'Name your top 3 values and one small goal aligned with them.',
     lessons: [
@@ -98,7 +98,7 @@ const STAGES = [
     ]
   },
   {
-    n: 8, key: 'rise', dim: 'stability', title: 'Rise & Sustain', sanskrit: 'Utthāna',
+    n: 8, key: 'rise', dim: 'stability', title: 'Rise & Sustain', sanskrit: 'Utthāna', glyph: '✺',
     tagline: 'Build stability and momentum that lasts.',
     practice: 'Set up one system for money, one for health, one for growth.',
     lessons: [
@@ -136,9 +136,29 @@ const videoThumb = (url) => {
   return yt ? `https://img.youtube.com/vi/${yt[1]}/mqdefault.jpg` : null;
 };
 
-/* --------- Life Wheel (radar chart) --------- */
+/* --------- A small ornamental "ॐ" wordmark --------- */
+const Om = ({ className = '' }) => <span className={`font-display ${className}`}>ॐ</span>;
+
+/* --------- A calming verse block --------- */
+const Verse = () => (
+  <section className="relative bg-sand/70 border-y border-gold/15 py-14 overflow-hidden">
+    <div className="mandala absolute -left-16 top-1/2 -translate-y-1/2 w-64 h-64 opacity-[0.05]" />
+    <div className="relative max-w-2xl mx-auto px-6 text-center">
+      <p className="text-3xl text-gold/80 mb-4">❝</p>
+      <p className="font-display text-2xl md:text-3xl text-maroon leading-snug">
+        उद्धरेदात्मनात्मानं नात्मानमवसादयेत्
+      </p>
+      <p className="text-ink-soft italic mt-3 max-w-xl mx-auto">
+        “Lift yourself by your own self; never let yourself sink. For the self alone is the friend of the self.”
+      </p>
+      <p className="eyebrow mt-4">Bhagavad Gītā · 6.5</p>
+    </div>
+  </section>
+);
+
+/* --------- Life Wheel (radar chart) — soft gradient + glow + vertex dots --------- */
 const LifeWheel = ({ scores }) => {
-  const size = 320, cx = size / 2, cy = size / 2, R = 120;
+  const size = 340, cx = size / 2, cy = size / 2, R = 122;
   const n = DIMENSIONS.length;
   const pt = (i, r) => {
     const a = (Math.PI * 2 * i) / n - Math.PI / 2;
@@ -146,15 +166,34 @@ const LifeWheel = ({ scores }) => {
   };
   const poly = DIMENSIONS.map((d, i) => pt(i, (scores[d.key] / 5) * R).join(',')).join(' ');
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} className="w-full max-w-xs mx-auto">
+    <svg viewBox={`0 0 ${size} ${size}`} className="w-full max-w-[19rem] mx-auto">
+      <defs>
+        <radialGradient id="lw-fill" cx="50%" cy="50%" r="65%">
+          <stop offset="0%" stopColor="#e4c97e" stopOpacity="0.55" />
+          <stop offset="100%" stopColor="#e0892b" stopOpacity="0.32" />
+        </radialGradient>
+        <filter id="lw-glow" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="4" result="b" />
+          <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+      </defs>
+      {/* concentric guide rings */}
       {[0.25, 0.5, 0.75, 1].map((f, k) => (
-        <polygon key={k} points={DIMENSIONS.map((_, i) => pt(i, R * f).join(',')).join(' ')} fill="none" stroke="#e6dcc6" strokeWidth="1" />
+        <polygon key={k} points={DIMENSIONS.map((_, i) => pt(i, R * f).join(',')).join(' ')}
+          fill="none" stroke="#dcccae" strokeWidth="1" opacity={0.7} />
       ))}
-      {DIMENSIONS.map((_, i) => { const [x, y] = pt(i, R); return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="#e6dcc6" strokeWidth="1" />; })}
-      <polygon points={poly} fill="rgba(224,137,43,0.25)" stroke="#c8a04a" strokeWidth="2" />
+      {/* spokes */}
+      {DIMENSIONS.map((_, i) => { const [x, y] = pt(i, R); return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="#e2d6bd" strokeWidth="1" />; })}
+      {/* the score shape */}
+      <g className="animate-wheel-in" filter="url(#lw-glow)">
+        <polygon points={poly} fill="url(#lw-fill)" stroke="#c8a04a" strokeWidth="2.5" strokeLinejoin="round" />
+      </g>
+      {/* vertex dots */}
+      {DIMENSIONS.map((d, i) => { const [x, y] = pt(i, (scores[d.key] / 5) * R); return <circle key={d.key} cx={x} cy={y} r="3.2" fill="#a5762b" />; })}
+      {/* labels */}
       {DIMENSIONS.map((d, i) => {
-        const [x, y] = pt(i, R + 16);
-        return <text key={d.key} x={x} y={y} fontSize="8.5" fill="#6b5f4f" textAnchor="middle" dominantBaseline="middle">{d.label.split(' ')[0]}</text>;
+        const [x, y] = pt(i, R + 18);
+        return <text key={d.key} x={x} y={y} fontSize="9.5" fill="#6b5f4f" fontWeight="600" textAnchor="middle" dominantBaseline="middle">{d.label.split(' ')[0]}</text>;
       })}
     </svg>
   );
@@ -166,10 +205,13 @@ const Player = ({ lesson, videoUrl, onEnded }) => {
   if (!embed) {
     return (
       <div className="w-full h-full bg-gradient-to-br from-maroon-dark to-maroon grid place-items-center relative">
-        <div className="mandala absolute inset-0 opacity-[0.08]" />
-        <div className="relative text-center text-cream">
-          <div className="h-16 w-16 mx-auto mb-3 rounded-full bg-gold/90 text-maroon-dark grid place-items-center text-2xl">▶</div>
-          <p className="text-sm text-cream/70">Video lesson · {lesson.dur}</p>
+        <div className="mandala animate-spin-slow absolute inset-0 m-auto w-[120%] h-[120%] opacity-[0.07]" />
+        <div className="relative text-center text-cream px-6">
+          <div className="relative mx-auto mb-4 h-20 w-20 grid place-items-center">
+            <span className="absolute inset-0 rounded-full bg-gold/30 animate-breathe" />
+            <span className="relative h-16 w-16 rounded-full bg-gold/90 text-maroon-dark grid place-items-center text-2xl">▶</span>
+          </div>
+          <p className="text-sm text-cream/75">Guided video · {lesson.dur}</p>
           <p className="text-xs text-cream/50 mt-1">Coming soon — this lesson's video is being prepared.</p>
         </div>
       </div>
@@ -200,78 +242,98 @@ const Watch = ({ playlist, activeId, videos, doneSet, progress, onSelect, onTogg
   const done = doneSet.has(lesson.id);
 
   return (
-    <main className="flex-1 bg-cream pt-24 pb-16">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <button onClick={onBack} className="text-sm text-maroon hover:text-saffron font-medium mb-4 inline-flex items-center gap-1">
-          ← Back to roadmap
+    <main className="flex-1 relative bg-gradient-to-b from-[#efe6d6] via-cream to-cream pt-24 pb-20 overflow-hidden">
+      {/* ambient aura behind the player */}
+      <div className="pointer-events-none absolute -top-10 left-1/4 w-[38rem] h-[38rem] rounded-full bg-gold/15 blur-3xl animate-breathe" />
+      <div className="pointer-events-none absolute top-40 -right-20 w-[30rem] h-[30rem] rounded-full bg-saffron/10 blur-3xl" />
+
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6">
+        <button onClick={onBack} className="group inline-flex items-center gap-2 text-sm text-maroon font-medium mb-5 rounded-full bg-white/70 border border-gold/25 px-4 py-1.5 hover:bg-white transition-colors">
+          <span className="transition-transform group-hover:-translate-x-0.5">←</span> Back to roadmap
         </button>
 
-        <div className="grid lg:grid-cols-[1fr_380px] gap-6">
+        <div className="grid lg:grid-cols-[1fr_390px] gap-7">
           {/* ---- Player + details ---- */}
-          <div>
-            <div className="aspect-video bg-black rounded-2xl overflow-hidden relative shadow-[var(--shadow-soft)]">
-              <Player lesson={lesson} videoUrl={videos[lesson.id]} onEnded={() => next && onSelect(next.lesson.id)} />
+          <div className="animate-fade-up">
+            <div className="relative">
+              <div className="absolute -inset-3 rounded-[1.6rem] bg-gradient-to-br from-gold/25 to-saffron/10 blur-xl" />
+              <div className="relative aspect-video bg-black rounded-2xl overflow-hidden ring-1 ring-gold/30 shadow-[var(--shadow-lift)]">
+                <Player lesson={lesson} videoUrl={videos[lesson.id]} onEnded={() => next && onSelect(next.lesson.id)} />
+              </div>
             </div>
 
-            <div className="mt-4">
-              <p className="eyebrow">{stage.title} · <span className="text-gold italic">{stage.sanskrit}</span></p>
-              <h1 className="font-display text-2xl md:text-3xl font-semibold text-maroon mt-1">{lesson.title}</h1>
-              <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-ink-soft">
+            <div className="mt-6">
+              <p className="eyebrow flex items-center gap-2">
+                <span className="text-gold">{stage.glyph}</span>{stage.title} · <span className="text-gold italic normal-case tracking-normal">{stage.sanskrit}</span>
+              </p>
+              <h1 className="font-display text-2xl md:text-3xl font-semibold text-maroon mt-1.5 leading-tight">{lesson.title}</h1>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-sm text-ink-soft">
                 <span>Lesson {idx + 1} of {playlist.length}</span>
-                <span>·</span>
+                <span className="text-gold/50">•</span>
                 <span>{lesson.dur}</span>
                 {done && <span className="pill bg-emerald-100 text-emerald-700 text-[0.65rem]">✓ Completed</span>}
               </div>
 
-              <div className="flex flex-wrap gap-3 mt-4">
+              <div className="flex flex-wrap gap-3 mt-5">
                 <button onClick={() => onToggle(lesson.id)} className={done ? 'btn btn-outline btn-sm' : 'btn btn-gold btn-sm'}>
                   {done ? 'Mark as not done' : '✓ Mark as complete'}
                 </button>
                 <button disabled={!prev} onClick={() => prev && onSelect(prev.lesson.id)} className="btn btn-outline btn-sm disabled:opacity-40">← Previous</button>
-                <button disabled={!next} onClick={() => next && onSelect(next.lesson.id)} className="btn btn-primary btn-sm disabled:opacity-40">Next →</button>
+                <button disabled={!next} onClick={() => next && onSelect(next.lesson.id)} className="btn btn-primary btn-sm disabled:opacity-40">Next lesson →</button>
               </div>
 
-              <div className="card p-4 mt-5">
-                <p className="text-ink-soft">{lesson.blurb}</p>
-                <div className="divider-gold my-3" />
-                <p className="text-sm text-ink"><span className="font-semibold text-maroon">This stage's practice:</span> {stage.practice}</p>
+              <div className="card p-6 mt-6 relative overflow-hidden">
+                <Om className="absolute -right-3 -bottom-4 text-7xl text-gold/10 select-none" />
+                <p className="relative text-ink-soft leading-relaxed">{lesson.blurb}</p>
+                <div className="divider-gold my-4" />
+                <div className="relative flex gap-3">
+                  <span className="text-gold text-lg leading-none">❋</span>
+                  <p className="text-sm text-ink"><span className="font-semibold text-maroon">This stage's practice — </span>{stage.practice}</p>
+                </div>
               </div>
             </div>
           </div>
 
           {/* ---- Playlist sidebar ---- */}
-          <aside className="lg:sticky lg:top-24 self-start">
+          <aside className="lg:sticky lg:top-24 self-start animate-fade-up" style={{ animationDelay: '0.1s' }}>
             <div className="card overflow-hidden">
-              <div className="p-4 border-b border-gold/10 bg-sand/60">
-                <p className="font-display text-lg font-semibold text-maroon">The 8 Stages Back to Life</p>
-                <p className="text-xs text-ink-soft mt-0.5">{doneSet.size} of {playlist.length} lessons complete · {progress}%</p>
-                <div className="h-1.5 rounded-full bg-black/10 mt-2 overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-saffron to-gold" style={{ width: `${progress}%` }} />
+              <div className="relative p-5 text-cream bg-gradient-to-br from-maroon to-maroon-dark overflow-hidden">
+                <div className="mandala absolute -right-6 -top-6 w-28 h-28 opacity-10" />
+                <p className="relative font-display text-lg font-semibold">The 8 Stages Back to Life</p>
+                <p className="relative text-xs text-cream/70 mt-0.5">{doneSet.size} of {playlist.length} lessons complete · {progress}%</p>
+                <div className="relative h-1.5 rounded-full bg-black/25 mt-2.5 overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-gold-light to-gold transition-all" style={{ width: `${progress}%` }} />
                 </div>
               </div>
-              <div className="max-h-[72vh] overflow-y-auto">
+              <div className="max-h-[70vh] overflow-y-auto py-1">
                 {playlist.map((p, i) => {
                   const active = p.lesson.id === activeId;
                   const ldone = doneSet.has(p.lesson.id);
                   const thumb = videoThumb(videos[p.lesson.id]);
+                  const hasVideo = !!videos[p.lesson.id];
                   const showStage = i === 0 || playlist[i - 1].stage.key !== p.stage.key;
                   return (
                     <React.Fragment key={p.lesson.id}>
                       {showStage && (
-                        <p className="px-4 pt-3 pb-1 text-[0.65rem] uppercase tracking-widest text-gold font-semibold">{p.stage.title}</p>
+                        <p className="px-4 pt-3 pb-1.5 text-[0.62rem] uppercase tracking-[0.2em] text-gold font-semibold flex items-center gap-1.5">
+                          <span>{p.stage.glyph}</span>{p.stage.title}
+                        </p>
                       )}
                       <button
                         onClick={() => onSelect(p.lesson.id)}
-                        className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${active ? 'bg-gold/15' : 'hover:bg-sand/70'}`}
+                        className={`group w-full flex items-center gap-3 pl-3 pr-3 py-2 text-left border-l-[3px] transition-colors ${active ? 'border-gold bg-gold/12' : 'border-transparent hover:bg-sand/70'}`}
                       >
-                        <span className="text-xs text-ink-soft/60 w-4 text-right flex-shrink-0">{active ? '▶' : i + 1}</span>
-                        <div className="relative h-12 w-20 rounded-md overflow-hidden flex-shrink-0 bg-gradient-to-br from-maroon to-maroon-dark grid place-items-center">
-                          {thumb ? <img src={thumb} alt="" className="h-full w-full object-cover" /> : <span className="text-gold text-sm">▶</span>}
-                          {ldone && <span className="absolute inset-0 bg-black/50 grid place-items-center text-emerald-300 text-lg">✓</span>}
+                        <span className={`text-xs w-4 text-center flex-shrink-0 ${active ? 'text-saffron' : 'text-ink-soft/50'}`}>{active ? '▶' : i + 1}</span>
+                        <div className="relative h-12 w-[5.5rem] rounded-lg overflow-hidden flex-shrink-0 bg-gradient-to-br from-maroon to-maroon-dark grid place-items-center ring-1 ring-black/5">
+                          {thumb
+                            ? <img src={thumb} alt="" className="h-full w-full object-cover" />
+                            : <span className="text-gold/90 text-sm">{p.stage.glyph}</span>}
+                          <span className="absolute bottom-0.5 right-0.5 text-[0.55rem] bg-black/70 text-white rounded px-1 leading-tight">{p.lesson.dur}</span>
+                          {ldone && <span className="absolute inset-0 bg-emerald-900/55 grid place-items-center text-white text-lg">✓</span>}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className={`text-sm font-medium leading-snug line-clamp-2 ${active ? 'text-maroon' : 'text-ink'}`}>{p.lesson.title}</p>
-                          <p className="text-xs text-ink-soft/70 mt-0.5">{p.lesson.dur}{videos[p.lesson.id] ? '' : ' · coming soon'}</p>
+                          <p className={`text-sm font-medium leading-snug line-clamp-2 ${active ? 'text-maroon' : 'text-ink group-hover:text-maroon'}`}>{p.lesson.title}</p>
+                          {!hasVideo && <p className="text-[0.68rem] text-ink-soft/60 mt-0.5">coming soon</p>}
                         </div>
                       </button>
                     </React.Fragment>
@@ -364,6 +426,7 @@ const Reawaken = () => {
     setData(next);
     pushServer(next);
     setView('plan');
+    window.scrollTo(0, 0);
   };
   const toggleLesson = (id) => {
     const done = new Set(data.done || []);
@@ -372,7 +435,7 @@ const Reawaken = () => {
     setData(next);
     pushServer(next);
   };
-  const retake = () => { setAnswers({}); setStep(0); setView('assess'); };
+  const retake = () => { setAnswers({}); setStep(0); setView('assess'); window.scrollTo(0, 0); };
 
   // Flat playlist (in roadmap order) that the watch view pages through.
   const playlist = useMemo(() => roadmap.flatMap((s) => s.lessons.map((l) => ({ stage: s, lesson: l }))), [roadmap]);
@@ -382,6 +445,8 @@ const Reawaken = () => {
     window.scrollTo(0, 0);
   };
 
+  const answered = answers[DIMENSIONS[step].key];
+
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
@@ -390,38 +455,54 @@ const Reawaken = () => {
       {view === 'intro' && (
         <>
           <header className="relative overflow-hidden bg-gradient-to-b from-maroon-dark via-maroon to-[#7d2636] text-cream">
-            <div className="mandala animate-spin-slow absolute -top-40 left-1/2 -translate-x-1/2 w-[680px] h-[680px] opacity-[0.08]" />
-            <div className="relative max-w-4xl mx-auto px-6 pt-36 pb-24 text-center">
-              <p className="eyebrow text-gold mb-4">॥ A Guided Journey ॥</p>
-              <h1 className="font-display text-5xl md:text-7xl font-semibold leading-[1.05] mb-6">
+            {/* layered ambient motion */}
+            <div className="pointer-events-none absolute top-24 left-1/2 -translate-x-1/2 w-[34rem] h-[34rem] rounded-full bg-gold/20 blur-3xl animate-breathe" />
+            <div className="mandala animate-spin-slow absolute -top-48 left-1/2 -translate-x-1/2 w-[720px] h-[720px] opacity-[0.09]" />
+            <div className="mandala animate-spin-rev absolute -bottom-56 -left-40 w-[560px] h-[560px] opacity-[0.05]" />
+
+            <div className="relative max-w-4xl mx-auto px-6 pt-36 pb-28 text-center animate-fade-up">
+              <div className="ornament mb-6"><span className="text-lg">ॐ</span></div>
+              <p className="eyebrow text-gold mb-5">A Guided Journey Back to Life</p>
+              <h1 className="font-display text-6xl md:text-8xl font-semibold leading-[0.95] mb-6">
                 Reawaken
-                <span className="block text-gold-light italic text-4xl md:text-5xl mt-2">Your path back to life</span>
+                <span className="block text-gradient-gold italic text-4xl md:text-6xl mt-3 font-medium">your path back to life</span>
               </h1>
               <p className="text-lg md:text-xl text-cream/80 max-w-2xl mx-auto leading-relaxed">
-                If life has slipped off track — the fog, the numbness, the lost momentum — this is a step-by-step
-                video program to rebuild it, one stage at a time. Ancient wisdom, made practical.
+                When life slips off track — the fog, the numbness, the lost momentum — this is a gentle, step-by-step
+                video journey to rebuild it, one stage at a time. Ancient wisdom, made practical.
               </p>
               <div className="mt-10 flex flex-wrap justify-center gap-4">
                 <button onClick={() => setView('assess')} className="btn btn-gold">Take the free Life Compass →</button>
-                <a href="#curriculum" className="btn btn-outline-light">See the 8 stages</a>
+                <a href="#curriculum" className="btn btn-outline-light">Explore the 8 stages</a>
+              </div>
+              <div className="mt-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-cream/60 tracking-wide">
+                <span>✦ 8 guided stages</span>
+                <span>✦ 25 short lessons</span>
+                <span>✦ A plan shaped around you</span>
               </div>
             </div>
-            <div className="h-16 bg-gradient-to-b from-transparent to-cream" />
+            <div className="h-20 bg-gradient-to-b from-transparent to-cream" />
           </header>
 
           <main className="flex-1 bg-cream">
-            <section className="max-w-6xl mx-auto px-6 py-16">
-              <div className="text-center mb-12">
+            <section className="max-w-6xl mx-auto px-6 py-20">
+              <div className="text-center mb-14">
                 <p className="eyebrow mb-2">How it works</p>
-                <h2 className="font-display text-4xl font-semibold text-maroon">A journey shaped around you</h2>
+                <h2 className="font-display text-4xl md:text-5xl font-semibold text-maroon">A journey shaped around you</h2>
+                <div className="ornament mt-4"><span>✦</span></div>
               </div>
-              <div className="grid md:grid-cols-3 gap-6">
+              <div className="relative grid md:grid-cols-3 gap-7">
+                {/* connecting path behind the medallions (desktop) */}
+                <div className="hidden md:block absolute top-[3.25rem] left-[16%] right-[16%] h-px border-t-2 border-dashed border-gold/30" />
                 {[
-                  { icon: '🧭', t: '1 · Life Compass', d: 'A short, honest assessment maps where you are across 8 areas of life and reveals what to focus on first.' },
-                  { icon: '🗺️', t: '2 · Your Roadmap', d: 'A personalized path through 8 stages — reordered so your hardest areas get the right support first.' },
-                  { icon: '🎥', t: '3 · Guided Videos', d: 'Short video lessons, a daily practice, and reflection for each stage — with progress you can see.' }
-                ].map((c) => (
-                  <div key={c.t} className="card p-7">
+                  { icon: '🧭', n: '1', t: 'Life Compass', d: 'A short, honest assessment maps where you are across 8 areas of life — and reveals what to tend to first.' },
+                  { icon: '🗺️', n: '2', t: 'Your Roadmap', d: 'A personalized path through 8 stages, reordered so your hardest areas get the right support first.' },
+                  { icon: '🎥', n: '3', t: 'Guided Videos', d: 'Short video lessons, a daily practice, and gentle reflection for each stage — with progress you can see.' }
+                ].map((c, i) => (
+                  <div key={c.t} className="relative card card-hover p-8 text-center animate-fade-up" style={{ animationDelay: `${i * 0.1}s` }}>
+                    <div className="relative mx-auto mb-5 h-[3.25rem] w-[3.25rem] -mt-11">
+                      <div className="h-full w-full rounded-full bg-gradient-to-br from-gold-light to-gold text-maroon-dark grid place-items-center font-display text-2xl font-semibold shadow-[0_8px_20px_-8px_rgba(200,160,74,0.8)] ring-4 ring-cream">{c.n}</div>
+                    </div>
                     <div className="text-3xl mb-3">{c.icon}</div>
                     <h3 className="font-display text-xl font-semibold text-maroon mb-2">{c.t}</h3>
                     <p className="text-ink-soft text-sm leading-relaxed">{c.d}</p>
@@ -429,6 +510,8 @@ const Reawaken = () => {
                 ))}
               </div>
             </section>
+
+            <Verse />
 
             <Curriculum roadmap={STAGES} doneSet={doneSet} onOpen={() => setView('assess')} preview />
 
@@ -439,39 +522,51 @@ const Reawaken = () => {
 
       {/* ===== ASSESSMENT ===== */}
       {view === 'assess' && (
-        <main className="flex-1 bg-cream pt-28 pb-16">
-          <div className="max-w-xl mx-auto px-6">
+        <main className="flex-1 relative bg-gradient-to-b from-sand/60 to-cream pt-28 pb-20 overflow-hidden">
+          <div className="pointer-events-none absolute -top-16 left-1/2 -translate-x-1/2 w-[30rem] h-[30rem] rounded-full bg-gold/12 blur-3xl animate-breathe" />
+          <div className="mandala animate-spin-slow absolute -top-24 left-1/2 -translate-x-1/2 w-72 h-72 opacity-[0.06]" />
+
+          <div className="relative max-w-xl mx-auto px-6">
             <div className="text-center mb-8">
-              <p className="eyebrow mb-1">Life Compass</p>
-              <h1 className="font-display text-3xl font-semibold text-maroon">Where are you right now?</h1>
-              <p className="text-ink-soft text-sm mt-2">Answer honestly — there are no wrong answers. {step + 1} of {DIMENSIONS.length}</p>
-            </div>
-            <div className="h-1.5 rounded-full bg-black/10 mb-8 overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-saffron to-gold transition-all" style={{ width: `${((step + 1) / DIMENSIONS.length) * 100}%` }} />
+              <p className="eyebrow mb-2">The Life Compass</p>
+              <h1 className="font-display text-3xl md:text-4xl font-semibold text-maroon">Where are you right now?</h1>
+              <p className="text-ink-soft text-sm mt-2">Breathe, and answer honestly — there are no wrong answers.</p>
             </div>
 
-            <div className="card p-8 text-center">
+            {/* progress: dots + slim bar */}
+            <div className="flex items-center justify-center gap-1.5 mb-3">
+              {DIMENSIONS.map((d, i) => (
+                <span key={d.key} className={`h-1.5 rounded-full transition-all ${i === step ? 'w-6 bg-saffron' : i < step || answers[d.key] ? 'w-1.5 bg-gold' : 'w-1.5 bg-black/10'}`} />
+              ))}
+            </div>
+            <p className="text-center text-xs text-ink-soft/70 mb-6">Question {step + 1} of {DIMENSIONS.length}</p>
+
+            <div key={step} className="card p-8 md:p-10 text-center animate-fade-up relative overflow-hidden">
+              <Om className="absolute -right-4 -top-5 text-8xl text-gold/[0.07] select-none" />
               <span className="eyebrow">{DIMENSIONS[step].label}</span>
-              <p className="font-display text-2xl text-maroon mt-2 mb-8 leading-snug">“{DIMENSIONS[step].q}”</p>
-              <div className="flex justify-between gap-2">
-                {[1, 2, 3, 4, 5].map((v) => (
-                  <button key={v} onClick={() => setAnswers({ ...answers, [DIMENSIONS[step].key]: v })}
-                    className={`flex-1 py-4 rounded-xl border-2 font-display text-xl transition-all ${answers[DIMENSIONS[step].key] === v ? 'border-gold bg-gold/15 text-maroon scale-105' : 'border-gold/25 text-ink-soft hover:border-gold/50'}`}>
-                    {v}
-                  </button>
-                ))}
+              <p className="font-display text-2xl md:text-[1.75rem] text-maroon mt-3 mb-9 leading-snug">“{DIMENSIONS[step].q}”</p>
+              <div className="flex justify-between items-end gap-2 sm:gap-3">
+                {[1, 2, 3, 4, 5].map((v) => {
+                  const sel = answered === v;
+                  return (
+                    <button key={v} onClick={() => setAnswers({ ...answers, [DIMENSIONS[step].key]: v })}
+                      className={`flex-1 aspect-square max-w-[3.75rem] mx-auto rounded-full border-2 font-display text-xl transition-all duration-200 ${sel ? 'border-gold bg-gradient-to-br from-gold-light to-gold text-maroon-dark scale-110 shadow-[0_10px_24px_-10px_rgba(200,160,74,0.9)]' : 'border-gold/30 text-ink-soft hover:border-gold hover:bg-gold/5'}`}>
+                      {v}
+                    </button>
+                  );
+                })}
               </div>
-              <div className="flex justify-between text-xs text-ink-soft/70 mt-2 px-1">
-                <span>Strongly disagree</span><span>Strongly agree</span>
+              <div className="flex justify-between text-xs text-ink-soft/70 mt-3 px-1">
+                <span>Not at all</span><span>Completely</span>
               </div>
             </div>
 
-            <div className="flex justify-between mt-6">
+            <div className="flex justify-between mt-7">
               <button onClick={() => (step === 0 ? setView('intro') : setStep(step - 1))} className="btn btn-outline">← Back</button>
               {step < DIMENSIONS.length - 1 ? (
-                <button disabled={!answers[DIMENSIONS[step].key]} onClick={() => setStep(step + 1)} className="btn btn-primary disabled:opacity-40">Next →</button>
+                <button disabled={!answered} onClick={() => setStep(step + 1)} className="btn btn-primary disabled:opacity-40">Next →</button>
               ) : (
-                <button disabled={!answers[DIMENSIONS[step].key]} onClick={submitAssessment} className="btn btn-gold disabled:opacity-40">See my roadmap ✨</button>
+                <button disabled={!answered} onClick={submitAssessment} className="btn btn-gold disabled:opacity-40">Reveal my roadmap ✦</button>
               )}
             </div>
           </div>
@@ -481,37 +576,45 @@ const Reawaken = () => {
       {/* ===== PLAN / ROADMAP ===== */}
       {view === 'plan' && data.scores && (
         <main className="flex-1 bg-cream">
-          <div className="relative bg-gradient-to-b from-maroon-dark to-maroon text-cream pt-32 pb-16 overflow-hidden">
-            <div className="mandala absolute -right-20 -top-12 w-80 h-80 opacity-[0.07]" />
+          <div className="relative bg-gradient-to-b from-maroon-dark via-maroon to-[#7a2333] text-cream pt-32 pb-24 overflow-hidden">
+            <div className="pointer-events-none absolute -top-10 right-10 w-[30rem] h-[30rem] rounded-full bg-gold/15 blur-3xl animate-breathe" />
+            <div className="mandala animate-spin-slow absolute -right-24 -top-16 w-96 h-96 opacity-[0.07]" />
             <div className="relative max-w-5xl mx-auto px-6">
               <p className="eyebrow text-gold mb-2">Your Life Compass</p>
-              <h1 className="font-display text-4xl md:text-5xl font-semibold">Your personalized roadmap</h1>
-              <div className="grid md:grid-cols-2 gap-8 mt-8 items-center">
-                <div className="card bg-cream/95 p-4"><LifeWheel scores={data.scores} /></div>
-                <div>
-                  <div className="flex items-baseline gap-2 mb-3">
-                    <span className="font-display text-5xl font-bold text-gold">{overall}%</span>
-                    <span className="text-cream/70">overall life balance</span>
+              <h1 className="font-display text-4xl md:text-6xl font-semibold leading-tight">Your personalized roadmap</h1>
+              <div className="grid md:grid-cols-2 gap-10 mt-10 items-center">
+                <div className="relative mx-auto">
+                  <div className="absolute inset-0 rounded-full bg-gold/15 blur-2xl animate-breathe" />
+                  <div className="relative rounded-full bg-cream/95 p-5 shadow-[var(--shadow-lift)] ring-1 ring-gold/30">
+                    <LifeWheel scores={data.scores} />
                   </div>
-                  <p className="text-cream/80 text-sm mb-4">Start here — the areas that need you most right now:</p>
-                  <div className="flex flex-wrap gap-2 mb-5">
+                </div>
+                <div className="animate-fade-up">
+                  <div className="flex items-baseline gap-3 mb-3">
+                    <span className="font-display text-6xl font-bold text-gradient-gold">{overall}%</span>
+                    <span className="text-cream/70 leading-tight">overall<br />life balance</span>
+                  </div>
+                  <p className="text-cream/80 text-sm mb-4">Start where it matters most — the areas asking for your care right now:</p>
+                  <div className="flex flex-wrap gap-2 mb-6">
                     {focus.map((f) => <span key={f.key} className="pill bg-gold/20 text-gold-light border border-gold/30">{f.label}</span>)}
                   </div>
-                  <div className="flex gap-3">
+                  <div className="flex flex-wrap gap-3">
                     <button onClick={() => openWatch(playlist[0]?.lesson.id)} className="btn btn-gold">▶ Begin the journey</button>
                     <button onClick={retake} className="btn btn-outline-light">Retake compass</button>
                   </div>
                 </div>
               </div>
             </div>
+            <div className="absolute bottom-0 inset-x-0 h-10 bg-gradient-to-b from-transparent to-cream" />
           </div>
 
           {progress > 0 && (
-            <div className="max-w-5xl mx-auto px-6 -mt-6">
-              <div className="card p-4 flex items-center gap-4">
-                <span className="text-sm text-ink-soft whitespace-nowrap">Program progress</span>
-                <div className="flex-1 h-2 rounded-full bg-black/10 overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-saffron to-gold" style={{ width: `${progress}%` }} />
+            <div className="max-w-5xl mx-auto px-6 -mt-8 relative z-10">
+              <div className="card p-5 flex items-center gap-4">
+                <span className="text-gold text-lg">❋</span>
+                <span className="text-sm text-ink-soft whitespace-nowrap font-medium">Program progress</span>
+                <div className="flex-1 h-2.5 rounded-full bg-black/10 overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-saffron to-gold transition-all" style={{ width: `${progress}%` }} />
                 </div>
                 <span className="text-sm font-semibold text-maroon">{progress}%</span>
               </div>
@@ -542,67 +645,81 @@ const Reawaken = () => {
   );
 };
 
-/* --------- Curriculum / roadmap list --------- */
+/* --------- Curriculum / roadmap list — a vertical "journey path" --------- */
 const Curriculum = ({ roadmap, doneSet, focus = [], onLesson, onOpen, preview }) => {
   const [open, setOpen] = useState(null);
   const focusKeys = new Set(focus.map((f) => f.key));
   return (
-    <section id={preview ? 'curriculum' : 'roadmap'} className="max-w-4xl mx-auto px-6 py-16">
-      <div className="text-center mb-10">
+    <section id={preview ? 'curriculum' : 'roadmap'} className="max-w-3xl mx-auto px-6 py-20">
+      <div className="text-center mb-12">
         <p className="eyebrow mb-2">{preview ? 'The Curriculum' : 'Your Roadmap'}</p>
-        <h2 className="font-display text-4xl font-semibold text-maroon">The 8 Stages Back to Life</h2>
-        {preview && <p className="text-ink-soft mt-3 max-w-xl mx-auto">Each stage is a hurdle to move through — with short videos, a practice, and reflection.</p>}
+        <h2 className="font-display text-4xl md:text-5xl font-semibold text-maroon">The 8 Stages Back to Life</h2>
+        {preview && <p className="text-ink-soft mt-3 max-w-xl mx-auto">Each stage is a gentle threshold to cross — with short videos, a daily practice, and reflection.</p>}
       </div>
 
-      <div className="space-y-4">
-        {roadmap.map((s, idx) => {
-          const isOpen = open === s.key;
-          const stageDone = s.lessons.every((l) => doneSet.has(l.id));
-          const isFocus = focusKeys.has(s.dim);
-          return (
-            <div key={s.key} className={`card overflow-hidden ${isFocus ? 'ring-2 ring-gold/40' : ''}`}>
-              <button onClick={() => setOpen(isOpen ? null : s.key)} className="w-full flex items-center gap-4 p-5 text-left">
-                <span className={`grid place-items-center h-12 w-12 rounded-full flex-shrink-0 font-display text-xl ${stageDone ? 'bg-emerald-100 text-emerald-700' : 'bg-gradient-to-br from-maroon to-maroon-dark text-gold'}`}>
+      {/* the journey path */}
+      <div className="relative">
+        <div className="absolute left-[1.4rem] top-4 bottom-4 w-px bg-gradient-to-b from-gold/50 via-gold/25 to-transparent" />
+        <div className="space-y-4">
+          {roadmap.map((s, idx) => {
+            const isOpen = open === s.key;
+            const stageDone = s.lessons.every((l) => doneSet.has(l.id));
+            const isFocus = focusKeys.has(s.dim);
+            return (
+              <div key={s.key} className="relative pl-14">
+                {/* medallion on the path */}
+                <span className={`absolute left-0 top-3 grid place-items-center h-11 w-11 rounded-full flex-shrink-0 font-display text-lg ring-4 ring-cream z-10 ${stageDone ? 'bg-emerald-500 text-white' : 'bg-gradient-to-br from-maroon to-maroon-dark text-gold'} ${isFocus && !stageDone ? 'shadow-[0_0_0_3px_rgba(224,137,43,0.35)]' : ''}`}>
                   {stageDone ? '✓' : idx + 1}
                 </span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-display text-xl font-semibold text-maroon">{s.title}</h3>
-                    <span className="text-xs text-gold italic">{s.sanskrit}</span>
-                    {isFocus && <span className="pill bg-saffron/15 text-saffron text-[0.6rem]">Focus first</span>}
-                  </div>
-                  <p className="text-sm text-ink-soft truncate">{s.tagline}</p>
-                </div>
-                <span className="text-ink-soft/60 flex-shrink-0">{s.lessons.length} lessons {isOpen ? '▲' : '▼'}</span>
-              </button>
-              {isOpen && (
-                <div className="px-5 pb-5 border-t border-gold/10 pt-3">
-                  {s.lessons.map((l) => {
-                    const done = doneSet.has(l.id);
-                    return (
-                      <div key={l.id}
-                        onClick={() => (preview ? onOpen() : onLesson(s, l))}
-                        className="flex items-center gap-3 py-2.5 cursor-pointer group">
-                        <span className={`h-7 w-7 rounded-full grid place-items-center text-xs flex-shrink-0 ${done ? 'bg-gold text-maroon-dark' : 'bg-sand text-maroon'}`}>{done ? '✓' : '▶'}</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-maroon font-medium group-hover:text-saffron transition-colors">{l.title}</p>
-                          <p className="text-xs text-ink-soft truncate">{l.blurb}</p>
-                        </div>
-                        <span className="text-xs text-ink-soft/60 flex-shrink-0">{l.dur}</span>
+                <div className={`card overflow-hidden transition-shadow ${isFocus ? 'ring-1 ring-gold/40' : ''} ${isOpen ? 'shadow-[var(--shadow-lift)]' : ''}`}>
+                  <button onClick={() => setOpen(isOpen ? null : s.key)} className="w-full flex items-center gap-3 p-5 text-left">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-gold">{s.glyph}</span>
+                        <h3 className="font-display text-xl font-semibold text-maroon">{s.title}</h3>
+                        <span className="text-xs text-gold italic">{s.sanskrit}</span>
+                        {isFocus && <span className="pill bg-saffron/15 text-saffron text-[0.6rem]">Focus first</span>}
                       </div>
-                    );
-                  })}
-                  <p className="mt-3 text-xs text-ink bg-sand rounded-lg p-3"><span className="font-semibold text-maroon">Practice:</span> {s.practice}</p>
+                      <p className="text-sm text-ink-soft truncate mt-0.5">{s.tagline}</p>
+                    </div>
+                    <span className="text-xs text-ink-soft/60 flex-shrink-0 flex items-center gap-1.5">
+                      <span className="hidden sm:inline">{s.lessons.length} lessons</span>
+                      <span className={`transition-transform ${isOpen ? 'rotate-180' : ''}`}>▾</span>
+                    </span>
+                  </button>
+                  {isOpen && (
+                    <div className="px-5 pb-5 border-t border-gold/10 pt-2 animate-fade-up">
+                      {s.lessons.map((l) => {
+                        const done = doneSet.has(l.id);
+                        return (
+                          <div key={l.id}
+                            onClick={() => (preview ? onOpen() : onLesson(s, l))}
+                            className="flex items-center gap-3 py-2.5 px-2 -mx-2 rounded-lg cursor-pointer group hover:bg-sand/60 transition-colors">
+                            <span className={`h-8 w-8 rounded-full grid place-items-center text-xs flex-shrink-0 transition-colors ${done ? 'bg-gold text-maroon-dark' : 'bg-sand text-maroon group-hover:bg-gold/25'}`}>{done ? '✓' : '▶'}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-maroon font-medium group-hover:text-saffron transition-colors">{l.title}</p>
+                              <p className="text-xs text-ink-soft truncate">{l.blurb}</p>
+                            </div>
+                            <span className="text-xs text-ink-soft/60 flex-shrink-0">{l.dur}</span>
+                          </div>
+                        );
+                      })}
+                      <div className="mt-3 flex gap-3 text-xs text-ink bg-sand/80 rounded-xl p-3.5">
+                        <span className="text-gold text-base leading-none">❋</span>
+                        <p><span className="font-semibold text-maroon">Practice — </span>{s.practice}</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          );
-        })}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {preview && (
-        <div className="text-center mt-10">
-          <button onClick={onOpen} className="btn btn-primary">Start with the free Life Compass</button>
+        <div className="text-center mt-12">
+          <button onClick={onOpen} className="btn btn-primary">Start with the free Life Compass →</button>
         </div>
       )}
     </section>
@@ -610,12 +727,12 @@ const Curriculum = ({ roadmap, doneSet, focus = [], onLesson, onOpen, preview })
 };
 
 const SafetyNote = () => (
-  <section className="max-w-4xl mx-auto px-6 pb-16">
-    <div className="card border-l-4 border-saffron p-5 text-sm text-ink-soft">
-      <p className="font-semibold text-maroon mb-1">A gentle, important note</p>
+  <section className="max-w-3xl mx-auto px-6 pb-20">
+    <div className="card border-l-4 border-saffron p-5 text-sm text-ink-soft leading-relaxed">
+      <p className="font-semibold text-maroon mb-1 flex items-center gap-2"><span className="text-saffron">♡</span> A gentle, important note</p>
       This program supports personal growth and is <span className="font-medium">not a substitute for professional medical or
       mental-health care</span>. If you are struggling severely or in crisis, please reach out to a professional or a helpline —
-      in India: <span className="text-maroon">KIRAN 1800-599-0019</span> (24/7) or <span className="text-maroon">iCall 9152987821</span>.
+      in India: <span className="text-maroon font-medium">KIRAN 1800-599-0019</span> (24/7) or <span className="text-maroon font-medium">iCall 9152987821</span>.
       You deserve support. 🙏
     </div>
   </section>
