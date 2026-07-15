@@ -26,6 +26,11 @@ router.get('/', async (req, res) => {
     }
 
     const products = await Product.find(query).sort({ createdAt: -1 }).limit(100);
+    // Let Vercel's edge / any CDN serve the catalog from cache for a minute and
+    // keep serving a slightly stale copy while it refreshes in the background.
+    // This means most visitors get books instantly instead of waiting on the
+    // (free-tier) API to wake up and query Mongo on every request.
+    res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
     res.json(products);
   } catch (error) {
     console.error(error);

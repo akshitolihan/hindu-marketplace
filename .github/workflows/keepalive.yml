@@ -5,7 +5,8 @@ name: Keep backend awake
 # stays warm. One always-on free instance fits within Render's 750 free hours/mo.
 on:
   schedule:
-    - cron: '*/10 * * * *' # every 10 minutes (GitHub may delay under load)
+    - cron: '*/5 * * * *' # every 5 minutes — GitHub often delays cron, so a
+                          # tighter interval keeps us under Render's ~15-min sleep window
   workflow_dispatch: {} # allow manual runs from the Actions tab
 
 jobs:

@@ -1,4 +1,5 @@
 const express = require('express');
+const cloudinary = require('../config/cloudinary');
 const auth = require('../middleware/auth');
 const adminAuth = require('../middleware/adminAuth');
 const ReawakenLesson = require('../models/ReawakenLesson');
@@ -99,6 +100,40 @@ router.get('/admin/lessons', adminAuth, async (req, res) => {
     res.json({ stages });
   } catch (e) {
     console.error(e);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Admin: get a signed payload for a DIRECT browser → Cloudinary video upload.
+// Large course videos must not be proxied through the (free-tier) server —
+// the browser uploads straight to Cloudinary, then saves the resulting URL via
+// the PUT route below.
+router.get('/admin/video-signature/:lessonId', adminAuth, (req, res) => {
+  try {
+    const { lessonId } = req.params;
+    if (!LESSON_IDS.has(lessonId)) return res.status(404).json({ message: 'Unknown lesson' });
+    if (!process.env.CLOUDINARY_API_SECRET) return res.status(500).json({ message: 'Uploads not configured' });
+
+    const timestamp = Math.round(Date.now() / 1000);
+    const folder = 'hindu-marketplace/reawaken-videos';
+    const public_id = `lesson-${lessonId}-${timestamp}`;
+    // Signature must cover exactly the params the browser will send (besides
+    // file / api_key / resource_type).
+    const signature = cloudinary.utils.api_sign_request(
+      { timestamp, folder, public_id },
+      process.env.CLOUDINARY_API_SECRET
+    );
+
+    res.json({
+      cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+      apiKey: process.env.CLOUDINARY_API_KEY,
+      timestamp,
+      folder,
+      publicId: public_id,
+      signature
+    });
+  } catch (e) {
+    console.error('video-signature error:', e.message);
     res.status(500).json({ message: 'Server error' });
   }
 });

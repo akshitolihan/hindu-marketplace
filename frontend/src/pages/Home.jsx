@@ -16,9 +16,13 @@ const categories = [
 
 const Home = () => {
   const [featured, setFeatured] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get('/products').then((res) => setFeatured(res.data.slice(0, 4))).catch(() => {});
+    api.get('/products')
+      .then((res) => setFeatured(res.data.slice(0, 4)))
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   return (
@@ -56,7 +60,7 @@ const Home = () => {
 
       <main className="flex-1 bg-cream">
         {/* ===== FEATURED ===== */}
-        {featured.length > 0 && (
+        {(loading || featured.length > 0) && (
           <section className="max-w-7xl mx-auto px-6 py-20">
             <div className="flex items-end justify-between mb-10">
               <div>
@@ -68,7 +72,18 @@ const Home = () => {
               </Link>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              {featured.map((p) => <BookCard key={p._id} product={p} />)}
+              {loading
+                ? Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="card overflow-hidden animate-pulse">
+                      <div className="aspect-[3/4] bg-gradient-to-br from-sand to-[#ecdfc6]" />
+                      <div className="p-4 space-y-2">
+                        <div className="h-4 rounded bg-gold/15 w-3/4" />
+                        <div className="h-3 rounded bg-gold/10 w-1/2" />
+                        <div className="h-5 rounded bg-gold/15 w-1/3 mt-3" />
+                      </div>
+                    </div>
+                  ))
+                : featured.map((p) => <BookCard key={p._id} product={p} />)}
             </div>
           </section>
         )}

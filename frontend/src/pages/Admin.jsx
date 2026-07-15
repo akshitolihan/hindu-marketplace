@@ -625,12 +625,15 @@ const Users = () => {
 };
 
 /* ---------------- Reawaken: manage lesson videos ---------------- */
+const MAX_VIDEO_MB = 100; // Cloudinary single-request video limit (free plan)
+
 const ReawakenAdmin = () => {
   const [stages, setStages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [drafts, setDrafts] = useState({}); // lessonId -> edited URL
   const [savingId, setSavingId] = useState(null);
   const [savedId, setSavedId] = useState(null);
+  const [uploads, setUploads] = useState({}); // lessonId -> percent (0-100)
   const [err, setErr] = useState('');
 
   useEffect(() => {
@@ -645,21 +648,70 @@ const ReawakenAdmin = () => {
       .finally(() => setLoading(false));
   }, []);
 
+  const applyVideo = (lessonId, videoUrl) => {
+    setDrafts((d) => ({ ...d, [lessonId]: videoUrl }));
+    setStages((prev) => prev.map((s) => ({
+      ...s,
+      lessons: s.lessons.map((l) => (l.id === lessonId ? { ...l, videoUrl } : l))
+    })));
+    setSavedId(lessonId);
+    setTimeout(() => setSavedId((c) => (c === lessonId ? null : c)), 2000);
+  };
+
   const save = async (lessonId) => {
     setErr('');
     setSavingId(lessonId);
     try {
       const { data } = await api.put(`/reawaken/admin/lessons/${lessonId}`, { videoUrl: drafts[lessonId] || '' });
-      setStages((prev) => prev.map((s) => ({
-        ...s,
-        lessons: s.lessons.map((l) => (l.id === lessonId ? { ...l, videoUrl: data.videoUrl } : l))
-      })));
-      setSavedId(lessonId);
-      setTimeout(() => setSavedId((c) => (c === lessonId ? null : c)), 2000);
+      applyVideo(lessonId, data.videoUrl);
     } catch (e) {
       setErr(e.response?.data?.message || 'Could not save that link.');
     } finally {
       setSavingId(null);
+    }
+  };
+
+  // Upload a video file straight from the browser to Cloudinary (signed), then
+  // save the resulting URL. Never routes the file through the server.
+  const uploadVideo = async (lessonId, file) => {
+    if (!file) return;
+    setErr('');
+    if (!file.type.startsWith('video/')) { setErr('Please choose a video file.'); return; }
+    if (file.size > MAX_VIDEO_MB * 1024 * 1024) {
+      setErr(`That file is ${(file.size / 1048576).toFixed(0)}MB. Please keep lesson videos under ${MAX_VIDEO_MB}MB (compress it, or paste a YouTube/Vimeo link instead).`);
+      return;
+    }
+    setUploads((u) => ({ ...u, [lessonId]: 0 }));
+    try {
+      const { data: sig } = await api.get(`/reawaken/admin/video-signature/${lessonId}`);
+      const form = new FormData();
+      form.append('file', file);
+      form.append('api_key', sig.apiKey);
+      form.append('timestamp', sig.timestamp);
+      form.append('folder', sig.folder);
+      form.append('public_id', sig.publicId);
+      form.append('signature', sig.signature);
+
+      const secureUrl = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `https://api.cloudinary.com/v1_1/${sig.cloudName}/video/upload`);
+        xhr.upload.onprogress = (ev) => {
+          if (ev.lengthComputable) setUploads((u) => ({ ...u, [lessonId]: Math.round((ev.loaded / ev.total) * 100) }));
+        };
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) resolve(JSON.parse(xhr.responseText).secure_url);
+          else reject(new Error(`Cloudinary upload failed (${xhr.status})`));
+        };
+        xhr.onerror = () => reject(new Error('Upload failed — check your connection.'));
+        xhr.send(form);
+      });
+
+      await api.put(`/reawaken/admin/lessons/${lessonId}`, { videoUrl: secureUrl });
+      applyVideo(lessonId, secureUrl);
+    } catch (e) {
+      setErr(e.response?.data?.message || e.message || 'Upload failed.');
+    } finally {
+      setUploads((u) => { const n = { ...u }; delete n[lessonId]; return n; });
     }
   };
 
@@ -673,9 +725,10 @@ const ReawakenAdmin = () => {
       <div className="mb-5">
         <h2 className="font-display text-2xl font-semibold text-maroon">Reawaken — course videos</h2>
         <p className="text-sm text-ink-soft mt-1">
-          Paste a YouTube, Vimeo, or direct video link (.mp4) for each lesson. It plays inside the
-          lesson on the <Link to="/reawaken" className="text-saffron underline">Reawaken</Link> page.
-          Leave blank to show a “coming soon” placeholder. <span className="text-maroon font-medium">{withVideo}/{total}</span> lessons have a video.
+          For each lesson, <span className="text-maroon font-medium">upload a video file</span> (up to {MAX_VIDEO_MB}MB) or paste a
+          YouTube / Vimeo / .mp4 link. It plays inside the lesson on the{' '}
+          <Link to="/reawaken" className="text-saffron underline">Reawaken</Link> page.
+          <span className="text-maroon font-medium"> {withVideo}/{total}</span> lessons have a video.
         </p>
       </div>
       {err && <p className="mb-4 p-3 rounded-lg bg-red-100 text-red-700 text-sm">{err}</p>}
@@ -686,32 +739,49 @@ const ReawakenAdmin = () => {
             <h3 className="font-display text-lg font-semibold text-maroon mb-3">
               <span className="text-gold mr-2">{i + 1}.</span>{s.title}
             </h3>
-            <div className="space-y-3">
-              {s.lessons.map((l) => (
-                <div key={l.id} className="flex flex-col sm:flex-row sm:items-center gap-2">
-                  <div className="sm:w-64 flex-shrink-0">
-                    <p className="text-sm font-medium text-maroon flex items-center gap-2">
-                      <span className={`h-2 w-2 rounded-full ${l.videoUrl ? 'bg-emerald-500' : 'bg-gray-300'}`} />
-                      {l.title}
-                    </p>
-                    <p className="text-xs text-ink-soft ml-4">{l.dur}</p>
+            <div className="space-y-4">
+              {s.lessons.map((l) => {
+                const pct = uploads[l.id];
+                const uploading = pct !== undefined;
+                return (
+                  <div key={l.id} className="border-b border-gold/10 pb-4 last:border-0 last:pb-0">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                      <div className="sm:w-64 flex-shrink-0">
+                        <p className="text-sm font-medium text-maroon flex items-center gap-2">
+                          <span className={`h-2 w-2 rounded-full ${l.videoUrl ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+                          {l.title}
+                        </p>
+                        <p className="text-xs text-ink-soft ml-4">{l.dur}</p>
+                      </div>
+                      <input
+                        type="url"
+                        value={drafts[l.id] ?? ''}
+                        onChange={(e) => setDrafts((d) => ({ ...d, [l.id]: e.target.value }))}
+                        placeholder="Paste a link, or upload a file →"
+                        disabled={uploading}
+                        className="flex-1 border border-gold/30 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold disabled:bg-gray-100"
+                      />
+                      <button
+                        onClick={() => save(l.id)}
+                        disabled={savingId === l.id || uploading || (drafts[l.id] ?? '') === (l.videoUrl || '')}
+                        className="btn btn-primary btn-sm disabled:opacity-40"
+                      >
+                        {savingId === l.id ? 'Saving…' : savedId === l.id ? '✓ Saved' : 'Save'}
+                      </button>
+                      <label className={`btn btn-outline btn-sm cursor-pointer whitespace-nowrap ${uploading ? 'opacity-60 pointer-events-none' : ''}`}>
+                        {uploading ? `${pct}%` : '⬆ Upload'}
+                        <input type="file" accept="video/*" className="hidden"
+                          onChange={(e) => { uploadVideo(l.id, e.target.files[0]); e.target.value = ''; }} />
+                      </label>
+                    </div>
+                    {uploading && (
+                      <div className="mt-2 ml-1 h-1.5 rounded-full bg-gold/15 overflow-hidden">
+                        <div className="h-full bg-gradient-to-r from-saffron to-gold transition-all" style={{ width: `${pct}%` }} />
+                      </div>
+                    )}
                   </div>
-                  <input
-                    type="url"
-                    value={drafts[l.id] ?? ''}
-                    onChange={(e) => setDrafts((d) => ({ ...d, [l.id]: e.target.value }))}
-                    placeholder="https://youtube.com/watch?v=…"
-                    className="flex-1 border border-gold/30 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold"
-                  />
-                  <button
-                    onClick={() => save(l.id)}
-                    disabled={savingId === l.id || (drafts[l.id] ?? '') === (l.videoUrl || '')}
-                    className="btn btn-primary btn-sm disabled:opacity-40"
-                  >
-                    {savingId === l.id ? 'Saving…' : savedId === l.id ? '✓ Saved' : 'Save'}
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ))}
