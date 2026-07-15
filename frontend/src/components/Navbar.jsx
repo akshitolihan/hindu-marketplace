@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 
@@ -19,30 +19,36 @@ const Navbar = () => {
 
   useEffect(() => setOpen(false), [location.pathname]);
 
-  const navLink = 'text-sm font-medium text-cream/85 hover:text-gold transition-colors';
+  // Underlined + gold when the link is the current page.
+  const navLink = ({ isActive }) =>
+    `text-sm font-medium transition-colors relative after:absolute after:-bottom-1.5 after:left-0 after:h-0.5 after:bg-gold after:transition-all ${
+      isActive ? 'text-gold after:w-full' : 'text-cream/85 hover:text-gold after:w-0'
+    }`;
+  const goldLink = ({ isActive }) =>
+    `text-sm font-semibold transition-colors ${isActive ? 'text-gold-light' : 'text-gold hover:text-gold-light'}`;
 
   const links = (
     <>
-      <Link to="/books" className={navLink}>Library</Link>
-      <Link to="/reawaken" className="text-sm font-semibold text-gold hover:text-gold-light transition-colors">Reawaken</Link>
+      <NavLink to="/books" className={navLink}>Library</NavLink>
+      <NavLink to="/reawaken" className={goldLink}>Reawaken</NavLink>
       {user ? (
         <>
-          <Link to="/my-library" className={navLink}>My Books</Link>
-          <Link to="/cart" className={`${navLink} relative`}>
+          <NavLink to="/my-library" className={navLink}>My Books</NavLink>
+          <NavLink to="/cart" className={({ isActive }) => `${navLink({ isActive })} pr-1`}>
             Cart
             {count > 0 && (
-              <span className="absolute -top-2 -right-4 bg-gold text-maroon-dark text-[10px] font-bold rounded-full h-4 min-w-4 px-1 flex items-center justify-center">
+              <span className="absolute -top-2 -right-3 bg-gold text-maroon-dark text-[10px] font-bold rounded-full h-4 min-w-4 px-1 flex items-center justify-center">
                 {count}
               </span>
             )}
-          </Link>
-          {isAdmin && <Link to="/admin" className="text-sm font-semibold text-gold hover:text-gold-light transition-colors">Admin</Link>}
-          <Link to="/account" className={navLink}>Account</Link>
+          </NavLink>
+          {isAdmin && <NavLink to="/admin" className={goldLink}>Admin</NavLink>}
+          <NavLink to="/account" className={navLink}>Account</NavLink>
           <button onClick={logout} className="btn btn-gold btn-sm">Logout</button>
         </>
       ) : (
         <>
-          <Link to="/login" className={navLink}>Login</Link>
+          <NavLink to="/login" className={navLink}>Login</NavLink>
           <Link to="/signup" className="btn btn-gold btn-sm">Begin Free</Link>
         </>
       )}
