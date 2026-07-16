@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 
 const Footer = () => (
-  <footer className="relative overflow-hidden bg-maroon-dark text-cream/70 pt-16 pb-8 mt-10">
+  <footer className="relative overflow-hidden bg-maroon-dark text-cream/70 pt-16 pb-8">
     {/* faint mandala motif */}
     <div className="mandala absolute -right-24 -top-24 w-96 h-96 opacity-[0.06] pointer-events-none" />
 
