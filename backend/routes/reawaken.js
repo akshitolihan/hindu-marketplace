@@ -123,7 +123,10 @@ router.get('/admin/video-upload-url/:lessonId', adminAuth, async (req, res) => {
     });
   } catch (e) {
     console.error('video-upload-url error:', e.message);
-    res.status(502).json({ message: 'Could not start the upload. Please try again.' });
+    // Relay Cloudflare's own reason (admin-only route) — e.g. an exceeded
+    // storage quota — so the admin knows exactly what to fix rather than
+    // seeing a generic error.
+    res.status(502).json({ message: `Could not start the upload: ${e.message}` });
   }
 });
 
