@@ -625,7 +625,7 @@ const Users = () => {
 };
 
 /* ---------------- Reawaken: manage lesson videos ---------------- */
-const MAX_VIDEO_MB = 200; // Cloudflare Stream single-request (non-resumable) upload limit
+const MAX_VIDEO_MB = 100; // conservative cross-provider pre-check; the server returns the real per-provider limit
 
 const ReawakenAdmin = () => {
   const [stages, setStages] = useState([]);
@@ -671,8 +671,9 @@ const ReawakenAdmin = () => {
     }
   };
 
-  // Upload a video file straight from the browser to Cloudflare Stream, then
-  // save the resulting playback URL. The file never routes through our server.
+  // Upload a video file straight from the browser to the configured provider
+  // (Cloudinary or Cloudflare), then save the resulting URL. The file never
+  // routes through our server.
   const uploadVideo = async (lessonId, file) => {
     if (!file) return;
     setErr('');
@@ -683,30 +684,37 @@ const ReawakenAdmin = () => {
     }
     setUploads((u) => ({ ...u, [lessonId]: 0 }));
     try {
-      // 1. Ask our server for a one-time Cloudflare upload URL.
+      // 1. Ask our server for a one-time upload target (provider-agnostic).
       const { data: up } = await api.get(`/reawaken/admin/video-upload-url/${lessonId}`);
 
-      // 2. Upload the file directly to Cloudflare with a live progress bar.
+      // 2. Upload the file directly to the provider with a live progress bar.
       const form = new FormData();
       form.append('file', file);
-      await new Promise((resolve, reject) => {
+      Object.entries(up.fields || {}).forEach(([k, v]) => form.append(k, v));
+
+      const responseText = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open('POST', up.uploadURL);
         xhr.upload.onprogress = (ev) => {
           if (ev.lengthComputable) setUploads((u) => ({ ...u, [lessonId]: Math.round((ev.loaded / ev.total) * 100) }));
         };
         xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) resolve();
+          if (xhr.status >= 200 && xhr.status < 300) resolve(xhr.responseText);
           else reject(new Error(`Upload failed (${xhr.status})`));
         };
         xhr.onerror = () => reject(new Error('Upload failed — check your connection.'));
         xhr.send(form);
       });
 
-      // 3. Save the playback URL. Cloudflare keeps encoding for a few seconds
-      //    after this; the player shows a brief "processing" state until ready.
-      await api.put(`/reawaken/admin/lessons/${lessonId}`, { videoUrl: up.playbackUrl });
-      applyVideo(lessonId, up.playbackUrl);
+      // 3. Determine the playback URL. Cloudflare gives it up front; Cloudinary
+      //    returns it as `secure_url` in the upload response.
+      let videoUrl = up.playbackUrl;
+      if (!videoUrl) videoUrl = JSON.parse(responseText).secure_url;
+      if (!videoUrl) throw new Error('Upload succeeded but no video URL was returned.');
+
+      // 4. Save it. (Providers may keep encoding briefly after this.)
+      await api.put(`/reawaken/admin/lessons/${lessonId}`, { videoUrl });
+      applyVideo(lessonId, videoUrl);
     } catch (e) {
       setErr(e.response?.data?.message || e.message || 'Upload failed.');
     } finally {

@@ -1,5 +1,5 @@
 const express = require('express');
-const cfStream = require('../config/cloudflareStream');
+const videoUpload = require('../config/videoUpload');
 const auth = require('../middleware/auth');
 const adminAuth = require('../middleware/adminAuth');
 const ReawakenLesson = require('../models/ReawakenLesson');
@@ -104,28 +104,22 @@ router.get('/admin/lessons', adminAuth, async (req, res) => {
   }
 });
 
-// Admin: get a one-time Cloudflare Stream upload URL for a DIRECT browser →
-// Cloudflare video upload. Large course videos must not be proxied through the
-// (free-tier) server — the browser uploads straight to Cloudflare, then saves
-// the resulting playback URL via the PUT route below.
+// Admin: get a one-time upload target for a DIRECT browser → provider video
+// upload (Cloudinary or Cloudflare Stream, per config). Large course videos
+// must not be proxied through the (free-tier) server — the browser uploads
+// straight to the provider, then saves the playback URL via the PUT route below.
 router.get('/admin/video-upload-url/:lessonId', adminAuth, async (req, res) => {
   try {
     const { lessonId } = req.params;
     if (!LESSON_IDS.has(lessonId)) return res.status(404).json({ message: 'Unknown lesson' });
-    if (!cfStream.isConfigured()) return res.status(500).json({ message: 'Video uploads are not configured yet.' });
 
-    const { uploadURL, uid } = await cfStream.createDirectUpload({ name: `reawaken-${lessonId}` });
-    res.json({
-      uploadURL,
-      uid,
-      playbackUrl: cfStream.playbackUrl(uid),
-      maxSizeMB: cfStream.MAX_UPLOAD_MB
-    });
+    const target = await videoUpload.createUploadTarget(lessonId);
+    if (!target) return res.status(500).json({ message: 'Video uploads are not configured yet.' });
+    res.json(target);
   } catch (e) {
     console.error('video-upload-url error:', e.message);
-    // Relay Cloudflare's own reason (admin-only route) — e.g. an exceeded
-    // storage quota — so the admin knows exactly what to fix rather than
-    // seeing a generic error.
+    // Relay the provider's own reason (admin-only route) — e.g. an exceeded
+    // storage quota — so the admin knows exactly what to fix.
     res.status(502).json({ message: `Could not start the upload: ${e.message}` });
   }
 });
