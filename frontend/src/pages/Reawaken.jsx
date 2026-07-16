@@ -248,7 +248,7 @@ const Watch = ({ playlist, activeId, videos, doneSet, progress, onSelect, onTogg
   });
 
   return (
-    <main className="flex-1 relative bg-[#0e0d12] text-cream pt-20 pb-16">
+    <main className="flex-1 relative bg-[#0e0d12] text-cream pt-20">
       {/* ambient warmth */}
       <div className="pointer-events-none absolute -top-10 left-1/4 w-[40rem] h-[40rem] rounded-full bg-gold/[0.06] blur-3xl" />
       <div className="pointer-events-none absolute top-40 -right-24 w-[32rem] h-[32rem] rounded-full bg-saffron/[0.05] blur-3xl" />
@@ -382,6 +382,9 @@ const Watch = ({ playlist, activeId, videos, doneSet, progress, onSelect, onTogg
           </aside>
         </div>
       </div>
+
+      {/* blend the dark theater smoothly into the maroon footer */}
+      <div className="h-28 mt-12 bg-gradient-to-b from-[#0e0d12] to-maroon-dark" />
     </main>
   );
 };
@@ -486,7 +489,7 @@ const Reawaken = () => {
   const answered = answers[DIMENSIONS[step].key];
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className={`min-h-screen flex flex-col ${view === 'watch' ? 'bg-maroon-dark' : ''}`}>
       <Navbar />
 
       {/* ===== INTRO ===== */}
