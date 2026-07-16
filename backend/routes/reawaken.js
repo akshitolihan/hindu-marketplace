@@ -1,5 +1,5 @@
 const express = require('express');
-const cloudinary = require('../config/cloudinary');
+const cfStream = require('../config/cloudflareStream');
 const auth = require('../middleware/auth');
 const adminAuth = require('../middleware/adminAuth');
 const ReawakenLesson = require('../models/ReawakenLesson');
@@ -104,37 +104,26 @@ router.get('/admin/lessons', adminAuth, async (req, res) => {
   }
 });
 
-// Admin: get a signed payload for a DIRECT browser → Cloudinary video upload.
-// Large course videos must not be proxied through the (free-tier) server —
-// the browser uploads straight to Cloudinary, then saves the resulting URL via
-// the PUT route below.
-router.get('/admin/video-signature/:lessonId', adminAuth, (req, res) => {
+// Admin: get a one-time Cloudflare Stream upload URL for a DIRECT browser →
+// Cloudflare video upload. Large course videos must not be proxied through the
+// (free-tier) server — the browser uploads straight to Cloudflare, then saves
+// the resulting playback URL via the PUT route below.
+router.get('/admin/video-upload-url/:lessonId', adminAuth, async (req, res) => {
   try {
     const { lessonId } = req.params;
     if (!LESSON_IDS.has(lessonId)) return res.status(404).json({ message: 'Unknown lesson' });
-    if (!process.env.CLOUDINARY_API_SECRET) return res.status(500).json({ message: 'Uploads not configured' });
+    if (!cfStream.isConfigured()) return res.status(500).json({ message: 'Video uploads are not configured yet.' });
 
-    const timestamp = Math.round(Date.now() / 1000);
-    const folder = 'hindu-marketplace/reawaken-videos';
-    const public_id = `lesson-${lessonId}-${timestamp}`;
-    // Signature must cover exactly the params the browser will send (besides
-    // file / api_key / resource_type).
-    const signature = cloudinary.utils.api_sign_request(
-      { timestamp, folder, public_id },
-      process.env.CLOUDINARY_API_SECRET
-    );
-
+    const { uploadURL, uid } = await cfStream.createDirectUpload({ name: `reawaken-${lessonId}` });
     res.json({
-      cloudName: process.env.CLOUDINARY_CLOUD_NAME,
-      apiKey: process.env.CLOUDINARY_API_KEY,
-      timestamp,
-      folder,
-      publicId: public_id,
-      signature
+      uploadURL,
+      uid,
+      playbackUrl: cfStream.playbackUrl(uid),
+      maxSizeMB: cfStream.MAX_UPLOAD_MB
     });
   } catch (e) {
-    console.error('video-signature error:', e.message);
-    res.status(500).json({ message: 'Server error' });
+    console.error('video-upload-url error:', e.message);
+    res.status(502).json({ message: 'Could not start the upload. Please try again.' });
   }
 });
 
