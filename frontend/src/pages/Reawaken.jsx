@@ -1,9 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
+
+// The video player pulls in Vidstack — lazy-load it so it only ships when a
+// visitor actually opens a lesson, keeping the main bundle lean.
+const LessonPlayer = lazy(() => import('../components/reawaken/LessonPlayer'));
 
 /* =========================================================================
    "Reawaken" — a guided, AI-led program to help people rebuild their life.
@@ -114,28 +118,6 @@ const STORE = 'reawaken_v1';
 const load = () => { try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch { return {}; } };
 const save = (d) => localStorage.setItem(STORE, JSON.stringify(d));
 
-// Turn an admin-entered URL (YouTube / Vimeo / direct file) into something we
-// can embed. iframes for the streaming services, a <video> for direct files.
-const videoEmbed = (url) => {
-  if (!url) return null;
-  const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
-  if (yt) return { type: 'iframe', src: `https://www.youtube.com/embed/${yt[1]}` };
-  const vm = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
-  if (vm) return { type: 'iframe', src: `https://player.vimeo.com/video/${vm[1]}` };
-  if (/\.(mp4|webm|ogg|mov)(\?|$)/i.test(url) || /res\.cloudinary\.com\/.*\/video\//.test(url)) {
-    return { type: 'video', src: url };
-  }
-  return { type: 'iframe', src: url };
-};
-
-// A playlist-style thumbnail. YouTube exposes one by video id; others fall back
-// to a gradient tile (returns null).
-const videoThumb = (url) => {
-  if (!url) return null;
-  const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
-  return yt ? `https://img.youtube.com/vi/${yt[1]}/mqdefault.jpg` : null;
-};
-
 /* --------- A small ornamental "ॐ" wordmark --------- */
 const Om = ({ className = '' }) => <span className={`font-display ${className}`}>ॐ</span>;
 
@@ -200,95 +182,127 @@ const LifeWheel = ({ scores }) => {
 };
 
 /* --------- The video player area (shared by the watch view) --------- */
-const Player = ({ lesson, videoUrl, onEnded }) => {
-  const embed = videoEmbed(videoUrl);
-  if (!embed) {
-    return (
-      <div className="w-full h-full bg-gradient-to-br from-maroon-dark to-maroon grid place-items-center relative">
-        <div className="mandala animate-spin-slow absolute inset-0 m-auto w-[120%] h-[120%] opacity-[0.07]" />
-        <div className="relative text-center text-cream px-6">
-          <div className="relative mx-auto mb-4 h-20 w-20 grid place-items-center">
-            <span className="absolute inset-0 rounded-full bg-gold/30 animate-breathe" />
-            <span className="relative h-16 w-16 rounded-full bg-gold/90 text-maroon-dark grid place-items-center text-2xl">▶</span>
-          </div>
-          <p className="text-sm text-cream/75">Guided video · {lesson.dur}</p>
-          <p className="text-xs text-cream/50 mt-1">Coming soon — this lesson's video is being prepared.</p>
-        </div>
+const PlayerFallback = ({ lesson, label = "Loading player…" }) => (
+  <div className="w-full h-full bg-gradient-to-br from-maroon-dark to-maroon grid place-items-center relative">
+    <div className="mandala animate-spin-slow absolute inset-0 m-auto w-[120%] h-[120%] opacity-[0.07]" />
+    <div className="relative text-center text-cream px-6">
+      <div className="relative mx-auto mb-4 h-20 w-20 grid place-items-center">
+        <span className="absolute inset-0 rounded-full bg-gold/30 animate-breathe" />
+        <span className="relative h-16 w-16 rounded-full bg-gold/90 text-maroon-dark grid place-items-center text-2xl">▶</span>
       </div>
-    );
-  }
-  return embed.type === 'video' ? (
-    <video key={lesson.id} src={embed.src} controls autoPlay className="w-full h-full" onEnded={onEnded} />
-  ) : (
-    <iframe
-      key={lesson.id}
-      src={embed.src}
-      title={lesson.title}
-      className="w-full h-full"
-      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-      allowFullScreen
-    />
+      <p className="text-sm text-cream/75">Guided video · {lesson.dur}</p>
+      <p className="text-xs text-cream/50 mt-1">{label}</p>
+    </div>
+  </div>
+);
+
+const Player = ({ lesson, videoUrl, onEnded }) => {
+  if (!videoUrl) return <PlayerFallback lesson={lesson} label="Coming soon — this lesson's video is being prepared." />;
+  return (
+    <Suspense fallback={<PlayerFallback lesson={lesson} />}>
+      <LessonPlayer title={lesson.title} src={videoUrl} onEnded={onEnded} />
+    </Suspense>
   );
 };
 
-/* --------- YouTube-style watch view: one player + a playlist sidebar --------- */
+/* --------- Circular progress ring for the playlist footer --------- */
+const ProgressRing = ({ percent, size = 52, stroke = 5 }) => {
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="flex-shrink-0 -rotate-90">
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={stroke} />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="url(#ring-gold)" strokeWidth={stroke}
+        strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c - (percent / 100) * c}
+        style={{ transition: 'stroke-dashoffset 0.5s ease' }} />
+      <defs>
+        <linearGradient id="ring-gold" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#e6b64d" />
+          <stop offset="100%" stopColor="#e0892b" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+};
+
+/* --------- Immersive "theater" watch view: player + a premium playlist --------- */
 const Watch = ({ playlist, activeId, videos, doneSet, progress, onSelect, onToggle, onBack }) => {
   const idx = Math.max(0, playlist.findIndex((p) => p.lesson.id === activeId));
   const current = playlist[idx];
+  const [collapsed, setCollapsed] = useState(() => new Set());
   if (!current) return null;
   const prev = playlist[idx - 1];
   const next = playlist[idx + 1];
   const { stage, lesson } = current;
   const done = doneSet.has(lesson.id);
 
+  // Group the flat playlist into stage sections for the sidebar.
+  const sections = [];
+  playlist.forEach((p, i) => {
+    const last = sections[sections.length - 1];
+    if (!last || last.stage.key !== p.stage.key) sections.push({ stage: p.stage, items: [{ ...p, i }] });
+    else last.items.push({ ...p, i });
+  });
+  const toggleSection = (key) => setCollapsed((c) => {
+    const n = new Set(c); n.has(key) ? n.delete(key) : n.add(key); return n;
+  });
+
   return (
-    <main className="flex-1 relative bg-gradient-to-b from-[#efe6d6] via-cream to-cream pt-24 pb-20 overflow-hidden">
-      {/* ambient aura behind the player */}
-      <div className="pointer-events-none absolute -top-10 left-1/4 w-[38rem] h-[38rem] rounded-full bg-gold/15 blur-3xl animate-breathe" />
-      <div className="pointer-events-none absolute top-40 -right-20 w-[30rem] h-[30rem] rounded-full bg-saffron/10 blur-3xl" />
+    <main className="flex-1 relative bg-[#0e0d12] text-cream pt-20 pb-16">
+      {/* ambient warmth */}
+      <div className="pointer-events-none absolute -top-10 left-1/4 w-[40rem] h-[40rem] rounded-full bg-gold/[0.06] blur-3xl" />
+      <div className="pointer-events-none absolute top-40 -right-24 w-[32rem] h-[32rem] rounded-full bg-saffron/[0.05] blur-3xl" />
 
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6">
-        <button onClick={onBack} className="group inline-flex items-center gap-2 text-sm text-maroon font-medium mb-5 rounded-full bg-white/70 border border-gold/25 px-4 py-1.5 hover:bg-white transition-colors">
-          <span className="transition-transform group-hover:-translate-x-0.5">←</span> Back to roadmap
-        </button>
+      <div className="relative max-w-[1400px] mx-auto px-4 sm:px-6">
+        {/* top bar */}
+        <div className="flex items-center justify-between mb-5">
+          <button onClick={onBack} className="group inline-flex items-center gap-2 text-sm font-medium rounded-full bg-white/5 border border-white/10 text-cream/85 px-4 py-1.5 hover:bg-white/10 transition-colors">
+            <span className="transition-transform group-hover:-translate-x-0.5">←</span> Back to roadmap
+          </button>
+          <p className="hidden sm:flex items-center gap-2 text-xs text-cream/50">
+            <span className="text-gold">{stage.glyph}</span>{stage.title}
+            <span className="text-white/20">·</span> Lesson {idx + 1} of {playlist.length}
+          </p>
+        </div>
 
-        <div className="grid lg:grid-cols-[1fr_390px] gap-7">
+        <div className="grid lg:grid-cols-[1fr_400px] gap-6">
           {/* ---- Player + details ---- */}
-          <div className="animate-fade-up">
-            <div className="relative">
-              <div className="absolute -inset-3 rounded-[1.6rem] bg-gradient-to-br from-gold/25 to-saffron/10 blur-xl" />
-              <div className="relative aspect-video bg-black rounded-2xl overflow-hidden ring-1 ring-gold/30 shadow-[var(--shadow-lift)]">
-                <Player lesson={lesson} videoUrl={videos[lesson.id]} onEnded={() => next && onSelect(next.lesson.id)} />
-              </div>
+          <div className="animate-fade-up min-w-0">
+            <div className="relative aspect-video bg-black rounded-2xl overflow-hidden ring-1 ring-white/10 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.9)]">
+              <Player lesson={lesson} videoUrl={videos[lesson.id]} onEnded={() => next && onSelect(next.lesson.id)} />
             </div>
 
             <div className="mt-6">
-              <p className="eyebrow flex items-center gap-2">
-                <span className="text-gold">{stage.glyph}</span>{stage.title} · <span className="text-gold italic normal-case tracking-normal">{stage.sanskrit}</span>
+              <p className="text-[0.7rem] uppercase tracking-[0.2em] font-semibold text-gold flex items-center gap-2">
+                <span>{stage.glyph}</span>{stage.title}
+                <span className="text-gold/60 italic normal-case tracking-normal font-normal">· {stage.sanskrit}</span>
               </p>
-              <h1 className="font-display text-2xl md:text-3xl font-semibold text-maroon mt-1.5 leading-tight">{lesson.title}</h1>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-sm text-ink-soft">
-                <span>Lesson {idx + 1} of {playlist.length}</span>
-                <span className="text-gold/50">•</span>
-                <span>{lesson.dur}</span>
-                {done && <span className="pill bg-emerald-100 text-emerald-700 text-[0.65rem]">✓ Completed</span>}
+              <h1 className="font-display text-2xl md:text-[2rem] font-semibold text-cream mt-2 leading-tight">{lesson.title}</h1>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 text-sm text-cream/55">
+                <span className="inline-flex items-center gap-1.5">🕐 {lesson.dur}</span>
+                <span className="inline-flex items-center gap-1.5">📶 Guided lesson</span>
+                <span className="inline-flex items-center gap-1.5 text-gold/80">✦ {stage.title}</span>
+                {done && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 text-emerald-300 text-xs px-2.5 py-0.5 border border-emerald-400/20">✓ Completed</span>}
               </div>
 
               <div className="flex flex-wrap gap-3 mt-5">
-                <button onClick={() => onToggle(lesson.id)} className={done ? 'btn btn-outline btn-sm' : 'btn btn-gold btn-sm'}>
-                  {done ? 'Mark as not done' : '✓ Mark as complete'}
+                <button onClick={() => onToggle(lesson.id)}
+                  className={`inline-flex items-center gap-2 rounded-full px-5 py-2 text-sm font-semibold transition-colors ${done ? 'bg-white/8 text-cream/80 border border-white/15 hover:bg-white/12' : 'bg-gradient-to-br from-gold to-[#d4922f] text-[#2a1608] hover:brightness-105'}`}>
+                  {done ? '↺ Mark as not done' : '✓ Mark as complete'}
                 </button>
-                <button disabled={!prev} onClick={() => prev && onSelect(prev.lesson.id)} className="btn btn-outline btn-sm disabled:opacity-40">← Previous</button>
-                <button disabled={!next} onClick={() => next && onSelect(next.lesson.id)} className="btn btn-primary btn-sm disabled:opacity-40">Next lesson →</button>
+                <button disabled={!prev} onClick={() => prev && onSelect(prev.lesson.id)}
+                  className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium bg-white/5 border border-white/10 text-cream/85 hover:bg-white/10 transition-colors disabled:opacity-30 disabled:hover:bg-white/5">← Previous</button>
+                <button disabled={!next} onClick={() => next && onSelect(next.lesson.id)}
+                  className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium bg-white/5 border border-white/10 text-cream/85 hover:bg-white/10 transition-colors disabled:opacity-30 disabled:hover:bg-white/5">Next lesson →</button>
               </div>
 
-              <div className="card p-6 mt-6 relative overflow-hidden">
-                <Om className="absolute -right-3 -bottom-4 text-7xl text-gold/10 select-none" />
-                <p className="relative text-ink-soft leading-relaxed">{lesson.blurb}</p>
-                <div className="divider-gold my-4" />
+              <div className="rounded-2xl bg-white/[0.04] border border-white/10 p-6 mt-6 relative overflow-hidden">
+                <Om className="absolute -right-3 -bottom-4 text-7xl text-gold/[0.07] select-none" />
+                <p className="relative text-cream/70 leading-relaxed">{lesson.blurb}</p>
+                <div className="h-px bg-gradient-to-r from-gold/30 to-transparent my-4" />
                 <div className="relative flex gap-3">
                   <span className="text-gold text-lg leading-none">❋</span>
-                  <p className="text-sm text-ink"><span className="font-semibold text-maroon">This stage's practice — </span>{stage.practice}</p>
+                  <p className="text-sm text-cream/75"><span className="font-semibold text-gold">This stage's practice — </span>{stage.practice}</p>
                 </div>
               </div>
             </div>
@@ -296,49 +310,73 @@ const Watch = ({ playlist, activeId, videos, doneSet, progress, onSelect, onTogg
 
           {/* ---- Playlist sidebar ---- */}
           <aside className="lg:sticky lg:top-24 self-start animate-fade-up" style={{ animationDelay: '0.1s' }}>
-            <div className="card overflow-hidden">
-              <div className="relative p-5 text-cream bg-gradient-to-br from-maroon to-maroon-dark overflow-hidden">
-                <div className="mandala absolute -right-6 -top-6 w-28 h-28 opacity-10" />
-                <p className="relative font-display text-lg font-semibold">The 8 Stages Back to Life</p>
-                <p className="relative text-xs text-cream/70 mt-0.5">{doneSet.size} of {playlist.length} lessons complete · {progress}%</p>
-                <div className="relative h-1.5 rounded-full bg-black/25 mt-2.5 overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-gold-light to-gold transition-all" style={{ width: `${progress}%` }} />
-                </div>
+            <div className="rounded-2xl bg-white/[0.03] border border-white/10 overflow-hidden">
+              <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-white/10">
+                <span className="font-display text-lg font-semibold text-cream">Lessons</span>
+                <span className="text-xs text-cream/45">{doneSet.size}/{playlist.length} done</span>
               </div>
-              <div className="max-h-[70vh] overflow-y-auto py-1">
-                {playlist.map((p, i) => {
-                  const active = p.lesson.id === activeId;
-                  const ldone = doneSet.has(p.lesson.id);
-                  const thumb = videoThumb(videos[p.lesson.id]);
-                  const hasVideo = !!videos[p.lesson.id];
-                  const showStage = i === 0 || playlist[i - 1].stage.key !== p.stage.key;
+
+              <div className="max-h-[62vh] overflow-y-auto reawaken-scroll">
+                {sections.map((sec) => {
+                  const isOpen = !collapsed.has(sec.stage.key);
+                  const secDone = sec.items.filter((it) => doneSet.has(it.lesson.id)).length;
                   return (
-                    <React.Fragment key={p.lesson.id}>
-                      {showStage && (
-                        <p className="px-4 pt-3 pb-1.5 text-[0.62rem] uppercase tracking-[0.2em] text-gold font-semibold flex items-center gap-1.5">
-                          <span>{p.stage.glyph}</span>{p.stage.title}
-                        </p>
-                      )}
-                      <button
-                        onClick={() => onSelect(p.lesson.id)}
-                        className={`group w-full flex items-center gap-3 pl-3 pr-3 py-2 text-left border-l-[3px] transition-colors ${active ? 'border-gold bg-gold/12' : 'border-transparent hover:bg-sand/70'}`}
-                      >
-                        <span className={`text-xs w-4 text-center flex-shrink-0 ${active ? 'text-saffron' : 'text-ink-soft/50'}`}>{active ? '▶' : i + 1}</span>
-                        <div className="relative h-12 w-[5.5rem] rounded-lg overflow-hidden flex-shrink-0 bg-gradient-to-br from-maroon to-maroon-dark grid place-items-center ring-1 ring-black/5">
-                          {thumb
-                            ? <img src={thumb} alt="" className="h-full w-full object-cover" />
-                            : <span className="text-gold/90 text-sm">{p.stage.glyph}</span>}
-                          <span className="absolute bottom-0.5 right-0.5 text-[0.55rem] bg-black/70 text-white rounded px-1 leading-tight">{p.lesson.dur}</span>
-                          {ldone && <span className="absolute inset-0 bg-emerald-900/55 grid place-items-center text-white text-lg">✓</span>}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-sm font-medium leading-snug line-clamp-2 ${active ? 'text-maroon' : 'text-ink group-hover:text-maroon'}`}>{p.lesson.title}</p>
-                          {!hasVideo && <p className="text-[0.68rem] text-ink-soft/60 mt-0.5">coming soon</p>}
-                        </div>
+                    <div key={sec.stage.key} className="border-b border-white/[0.06] last:border-0">
+                      <button onClick={() => toggleSection(sec.stage.key)}
+                        className="w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/[0.03] transition-colors">
+                        <span className="text-gold text-sm">{sec.stage.glyph}</span>
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-sm font-semibold text-cream truncate">{sec.stage.title}</span>
+                          <span className="block text-[0.68rem] text-cream/40">{secDone}/{sec.items.length} · {sec.stage.sanskrit}</span>
+                        </span>
+                        <span className={`text-cream/40 text-xs transition-transform ${isOpen ? 'rotate-180' : ''}`}>▾</span>
                       </button>
-                    </React.Fragment>
+
+                      {isOpen && sec.items.map((it) => {
+                        const active = it.lesson.id === activeId;
+                        const ldone = doneSet.has(it.lesson.id);
+                        const hasVideo = !!videos[it.lesson.id];
+                        return (
+                          <button key={it.lesson.id} disabled={!hasVideo && !ldone}
+                            onClick={() => onSelect(it.lesson.id)}
+                            className={`group w-full flex items-center gap-3 pl-5 pr-4 py-2.5 text-left transition-colors ${active ? 'bg-gold/[0.12]' : 'hover:bg-white/[0.04]'} ${!hasVideo && !ldone ? 'cursor-not-allowed' : ''}`}>
+                            {/* status icon */}
+                            <span className="flex-shrink-0">
+                              {ldone ? (
+                                <span className="grid place-items-center h-6 w-6 rounded-full bg-gradient-to-br from-gold to-[#d4922f] text-[#2a1608] text-xs font-bold">✓</span>
+                              ) : active ? (
+                                <span className="grid place-items-center h-6 w-6 rounded-full border-2 border-gold text-gold text-[0.6rem]">▶</span>
+                              ) : hasVideo ? (
+                                <span className="grid place-items-center h-6 w-6 rounded-full border border-white/25 text-cream/55 text-[0.6rem] group-hover:border-gold/60 group-hover:text-gold transition-colors">▶</span>
+                              ) : (
+                                <span className="grid place-items-center h-6 w-6 rounded-full border border-white/10 text-cream/25 text-[0.7rem]">🔒</span>
+                              )}
+                            </span>
+                            <span className="flex-1 min-w-0">
+                              <span className={`block text-sm leading-snug line-clamp-2 ${active ? 'text-gold font-medium' : ldone ? 'text-cream/70' : hasVideo ? 'text-cream/90' : 'text-cream/35'}`}>
+                                {it.lesson.title}
+                              </span>
+                              {!hasVideo && !ldone && <span className="block text-[0.66rem] text-cream/30 mt-0.5">coming soon</span>}
+                            </span>
+                            <span className="flex-shrink-0 text-[0.7rem] text-cream/40 tabular-nums">{it.lesson.dur}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   );
                 })}
+              </div>
+
+              {/* course progress footer */}
+              <div className="flex items-center gap-4 px-5 py-4 border-t border-white/10 bg-white/[0.02]">
+                <div className="relative grid place-items-center">
+                  <ProgressRing percent={progress} />
+                  <span className="absolute text-[0.7rem] font-semibold text-cream">{progress}%</span>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-cream">Course Progress</p>
+                  <p className="text-xs text-cream/50">{doneSet.size} of {playlist.length} lessons completed</p>
+                </div>
               </div>
             </div>
           </aside>
